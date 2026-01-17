@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ty</title>
+    <style>
+        * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #001a33;
+    min-height: 600vh;
+}
+
+body::-webkit-scrollbar {
+    width: 10px;
+}
+
+body::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+}
+
+#aurora-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.glass-card {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    width: 85%;
+    max-width: 600px;
+    height: 450px;
+    padding: 50px 40px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-radius: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform, opacity;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.glass-card.active {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card:not(.active) .card-content {
+    filter: blur(8px);
+    opacity: 0.3;
+    transition: filter 0.6s ease, opacity 0.6s ease;
+}
+
+.glass-card.active .card-content {
+    filter: blur(0);
+    opacity: 1;
+}
+
+.card-1 {
+    transform: translate(calc(-50% - 80px), calc(-40% - 40px)) scale(0.93) rotate(-6deg);
+    z-index: 1;
+    opacity: 0.6;
+}
+
+.card-2 {
+    transform: translate(calc(-50% - 60px), calc(-40% - 30px)) scale(0.95) rotate(-4.5deg);
+    z-index: 2;
+    opacity: 0.7;
+}
+
+.card-3 {
+    transform: translate(calc(-50% - 40px), calc(-40% - 20px)) scale(0.97) rotate(-3deg);
+    z-index: 3;
+    opacity: 0.8;
+}
+
+.card-4 {
+    transform: translate(calc(-50% - 20px), calc(-40% - 10px)) scale(0.99) rotate(-1.5deg);
+    z-index: 4;
+    opacity: 0.9;
+}
+
+.card-5 {
+    transform: translate(-50%, -40%);
+    z-index: 5;
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .glass-card {
+        padding: 30px 25px;
+        height: 420px;
+    }
+    
+    .card-content h1 {
+        font-size: 28px;
+        margin-top: 0;
+        margin-bottom: 10px;
+        line-height: 1.2;
+    }
+    
+    .card-content p {
+        font-size: 15px;
+        line-height: 1.5;
+        margin: 10px 0;
+    }
+    
+    .card-1 {
+        transform: translate(-50%, calc(-40% + 80px)) scale(0.93);
+    }
+
+    .card-2 {
+        transform: translate(-50%, calc(-40% + 60px)) scale(0.95);
+    }
+
+    .card-3 {
+        transform: translate(-50%, calc(-40% + 40px)) scale(0.97);
+    }
+
+    .card-4 {
+        transform: translate(-50%, calc(-40% + 20px)) scale(0.99);
+    }
+    
+    .inner-tiles {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 20px;
+    }
+    
+    .tile {
+        height: 90px;
+    }
+    
+    .tile-front, .tile-back {
+        font-size: 13px;
+        padding: 8px;
+    }
+    
+    .thank-you-content p {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .glass-card {
+        padding: 25px 20px;
+        height: 400px;
+        width: 90%;
+    }
+    
+    .card-content h1 {
+        font-size: 24px;
+    }
+    
+    .card-content p {
+        font-size: 14px;
+    }
+    
+    .inner-tiles {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .tile {
+        height: 65px;
+    }
+}
+
+/* Centered content for all cards */
+.card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    height: 100%;
+    width: 100%;
+    color: #fff;
+    transition: filter 0.6s ease, opacity 0.6s ease;
+}
+
+.card-content h1 {
+    font-size: 36px;
+    margin-bottom: 15px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 700;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    letter-spacing: -0.5px;
+}
+
+.card-content .accent-line {
+    margin: 15px auto;
+}
+
+.card-content p {
+    font-size: 18px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+    max-width: 550px;
+    margin: 0 auto 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.thank-you-content p {
+    font-size: 16px;
+}
+
+.card-content p:last-child {
+    margin-bottom: 0;
+}
+
+.dog-gif-container {
+    width: 100%;
+    max-width: 400px;
+    height: 250px;
+    margin: 30px auto;
+    border-radius: 20px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+}
+
+.dog-gif-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dog-gif-placeholder {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 18px;
+    text-align: center;
+    padding: 20px;
+}
+
+.accent-line {
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(90deg, #00ff88, #00ccff);
+    margin: 6px auto;
+    border-radius: 2px;
+}
+
+.inner-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 30px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.tile {
+    position: relative;
+    height: 90px;
+    perspective: 1000px;
+}
+
+.tile-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+
+.tile:hover .tile-inner {
+    transform: rotateY(180deg);
+}
+
+.tile-front, .tile-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    padding: 10px;
+}
+
+.tile-front {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 20px rgba(0, 255, 200, 0.4),
+                inset 0 1px 3px rgba(0, 255, 200, 0.3),
+                0 0 15px rgba(0, 255, 200, 0.2);
+}
+
+.tile-back {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 204, 255, 0.2));
+    border: 1px solid rgba(0, 255, 200, 0.3);
+    color: #fff;
+    transform: rotateY(180deg);
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1),
+                inset 0 1px 2px rgba(255, 255, 255, 0.2);
+}
+
+.hover-hint {
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    text-align: center;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+.glassy-logo {
+    position: fixed;
+    top: 30px;
+    right: 40px;
+    font-size: 28px;
+    font-weight: 700;
+    font-family: 'Brush Script MT', 'Lucida Calligraphy', cursive;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(200, 255, 255, 0.7) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 4px 20px rgba(0, 255, 200, 0.4);
+    z-index: 1000;
+    letter-spacing: 1px;
+    padding: 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 15px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: all 0.3s ease-out;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.glassy-logo:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(0, 255, 200, 0.4);
+    box-shadow: 0 8px 32px rgba(0, 255, 200, 0.3);
+}
+
+#scrollHint {
+    position: fixed;
+    bottom: 75px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    text-align: center;
+    animation: bounce 2s infinite;
+}
+
+.scroll-hint-text {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 10px;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.scroll-arrow {
+    font-size: 32px;
+    color: rgba(0, 255, 200, 0.8);
+    text-shadow: 0 0 20px rgba(0, 255, 200, 0.6);
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateX(-50%) translateY(0);
+    }
+    40% {
+        transform: translateX(-50%) translateY(-20px);
+    }
+    60% {
+        transform: translateX(-50%) translateY(-10px);
+    }
+}
+
+.social-links {
+    position: fixed;
+    top: 30px;
+    left: 40px;
+    z-index: 1000;
+    display: flex;
+    gap: 15px;
+}
+
+.linkedin-logo, .github-logo, .resume-btn {
+    width: 50px;
+    height: 50px;
+    padding: 10px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 15px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.linkedin-logo:hover {
+    background-color: rgba(0, 119, 181, 0.3);
+    border-color: rgba(0, 119, 181, 0.5);
+    transform: scale(1.1);
+}
+
+.linkedin-logo svg {
+    width: 30px;
+    height: 30px;
+    fill: #0077B5;
+}
+
+.github-logo:hover {
+    background-color: rgba(88, 96, 105, 0.3);
+    border-color: rgba(88, 96, 105, 0.5);
+    transform: scale(1.1);
+}
+
+.github-logo svg {
+    width: 30px;
+    height: 30px;
+    fill: #ffffff;
+}
+
+.resume-btn:hover {
+    background-color: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.5);
+    transform: scale(1.1);
+}
+
+.resume-btn svg {
+    width: 30px;
+    height: 30px;
+    fill: #4CAF50;
+}
+
+#resumeModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+#resumeModal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(30px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 30px;
+    padding: 40px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h2 {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #fff;
+    margin-bottom: 15px;
+    font-size: 28px;
+}
+
+.modal-content p {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 20px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.modal-content input,
+.modal-content textarea {
+    width: 100%;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+}
+
+.modal-content input::placeholder,
+.modal-content textarea::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.modal-content textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.error-msg {
+    color: #ff6b6b;
+    font-size: 14px;
+    margin: -10px 0 10px 0;
+    display: none;
+}
+
+.success-msg {
+    color: #4CAF50;
+    font-size: 14px;
+    margin-bottom: 15px;
+    display: none;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    border-radius: 15px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.download-btn {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.3), rgba(0, 204, 255, 0.3));
+    color: #fff;
+    border: 1px solid rgba(0, 255, 200, 0.4);
+}
+
+.download-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 255, 136, 0.5), rgba(0, 204, 255, 0.5));
+    transform: scale(1.05);
+}
+
+.cancel-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.card-navigation {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    align-items: center;
+    padding: 20px 40px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.nav-line {
+    height: 2px;
+    width: 250px;
+    background: linear-gradient(to right, 
+        rgba(255, 255, 255, 0.2), 
+        rgba(0, 255, 200, 0.4), 
+        rgba(255, 255, 255, 0.2));
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.nav-dots {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    gap: 50px;
+    padding: 0;
+    z-index: 1;
+}
+
+.nav-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.nav-dot:hover {
+    background: rgba(0, 255, 200, 0.6);
+    border-color: rgba(0, 255, 200, 0.8);
+    transform: scale(1.3);
+    box-shadow: 0 0 15px rgba(0, 255, 200, 0.6);
+}
+
+.nav-dot.active {
+    background: rgba(0, 255, 200, 0.8);
+    border-color: rgba(0, 255, 200, 1);
+    transform: scale(1.4);
+    box-shadow: 0 0 20px rgba(0, 255, 200, 0.8);
+}
+
+.nav-dot-label {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 5px 10px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
+}
+
+.nav-dot:hover .nav-dot-label {
+    opacity: 1;
+}
+    </style>
+</head>
+<body>
+    <canvas id="aurora-canvas"></canvas>
+    
+    <div class="social-links">
+        <a href="https://www.linkedin.com/in/tyash" target="_blank" rel="noopener noreferrer" class="linkedin-logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+        </a>
+                <a href="https://github.com/Tys139" target="_blank" rel="noopener noreferrer" class="github-logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+        </a>
+        <!-- <button class="resume-btn" id="resumeBtn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+            </svg>
+        </button> -->
+        
+    </div>
+    
+    <div class="glassy-logo" id="gradientToggle" title="Aurora Classic">ty</div>
+    
+    <div class="card-navigation">
+        <div class="nav-line"></div>
+        <div class="nav-dots">
+            <div class="nav-dot active" data-card="5">
+                <span class="nav-dot-label">Hi</span>
+            </div>
+            <div class="nav-dot" data-card="4">
+                <span class="nav-dot-label">Work Experience</span>
+            </div>
+            <div class="nav-dot" data-card="3">
+                <span class="nav-dot-label">Skills</span>
+            </div>
+            <div class="nav-dot" data-card="2">
+                <span class="nav-dot-label">Certifications</span>
+            </div>
+            <div class="nav-dot" data-card="1">
+                <span class="nav-dot-label">Education</span>
+            </div>
+        </div>
+    </div>
+    
+    <div id="scrollHint">
+        <div class="scroll-hint-text">Scroll to explore</div>
+        <div class="scroll-arrow">↓</div>
+    </div>
+    
+    <!-- <div id="resumeModal">
+        <div class="modal-content">
+            <h2>Download Resume</h2>
+            <p>Please provide your business email to download the resume. Personal email addresses (Gmail, Yahoo, Outlook, etc.) are not accepted.</p>
+            <input type="text" id="userName" placeholder="Your Name" required>
+            <input type="email" id="userEmail" placeholder="Your Business Email" required>
+            <div class="error-msg" id="errorMsg"></div>
+            <div class="success-msg" id="successMsg">Verification email sent! Downloading resume...</div>
+            <input type="text" id="companyName" placeholder="Company Name" required>
+            <textarea id="userMessage" placeholder="Brief message (optional)"></textarea>
+            <div class="modal-buttons">
+                <button class="cancel-btn" id="cancelBtn">Cancel</button>
+                <button class="download-btn" id="downloadBtn">Download Resume</button>
+            </div>
+        </div>
+    </div> -->
+    
+    <!-- Card 1 -->
+    <div class="glass-card card-1">
+        <div class="card-content">
+            <h2>Education</h2>
+            <div class="accent-line"></div>
+            <p>Master's in Management Science with Graduate Diploma in Data Analytics - University of Waterloo, Canada</p>
+
+        </div>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="glass-card card-4">
+        <div class="card-content">
+            <h1>Work Experience</h1>
+            <div class="accent-line"></div>
+
+            <p>Royal Bank of Canada</p>
+            <p>View the Space (VTS)</p>
+            <p>Accenture</p>
+            <p>Tata Consultancy Services (TCS)</p>
+        </div>
+    </div>
+
+    <!-- Card 3 -->
+    <div class="glass-card card-2">
+        <div class="card-content">
+                        <h2>Certifications</h2>
+            <div class="accent-line"></div>
+
+            <p>Certified Kubernetes Application Developer (CKAD)</p>
+            <p>Microsoft Certified: Azure Administrator Associate</p>
+                        <p>SAFe6 Certified Product Owner / Product Manager</p>
+            <p>FinOps Certified Engineer</p>
+         <!-- Card 2    <h1></h1>
+            <div class="accent-line"></div>
+            <p>My work sits at the intersection of data engineering, application integration, and internal platform development.Iâ€™ve designed and built end-to-end data platforms that ingest data from core business applications and deliver curated, auditable data dashboards/packages directly to end users.</p>
+        --></div>
+    </div>
+
+    <!-- Card 4 -->
+    <div class="glass-card card-3">
+        <div class="card-content">
+            <h2>Skills</h2>
+            <div class="accent-line"></div>
+            <h3>Data Engineering</h3>
+<p>ETL/ELT pipelines, Dashboards</p>
+
+<h3>Enterprise Systems</h3>
+<p>ERP, CRM, finance platforms, SaaS integrations</p>
+
+<h3>Operational Effectiveness</h3>
+<p>Process/efficiency optimization, automation, workflow design</p>
+        </div>
+    </div>
+
+    <!-- Card 5 -->
+    <div class="glass-card card-5 active">
+        <div class="card-content thank-you-content">
+            <h1>Tathagat Yash</h1>
+            <div class="accent-line"></div>
+            <p>I'm a Senior Data Engineer with full-stack development experience, building production data platforms and internal tools that power end-user and operational workflows.</p>
+            <p>I currently work as a Senior Manager / Lead Engineer at RBC Insurance, focused on improving operational effectiveness through reliable, well-engineered data systems.</p>
+        </div>
+    </div>
+
+    <script>
+        if (history.scrollRestoration) {
+            history.scrollRestoration = 'manual';
+        }
+        
+        // Set initial scroll position to top (card 5)
+        window.onbeforeunload = function() {
+            window.scrollTo(0, 0);
+        };
+        
+        // Scroll to top on load to show card 5
+        window.onload = function() {
+            window.scrollTo(0, 0);
+            setTimeout(() => {
+                window.scrollTo(0, 0);
+            }, 100);
+        };
+        
+        const canvas = document.getElementById('aurora-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = Math.max(window.innerHeight, document.body.scrollHeight);
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Helper functions for color interpolation
+        function parseColor(colorString) {
+            const match = colorString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+            if (match) {
+                return {
+                    r: parseInt(match[1]),
+                    g: parseInt(match[2]),
+                    b: parseInt(match[3]),
+                    a: parseFloat(match[4])
+                };
+            }
+            return { r: 0, g: 0, b: 0, a: 1 };
+        }
+
+        function interpolateColor(color1, color2, t) {
+            return {
+                r: Math.round(color1.r + (color2.r - color1.r) * t),
+                g: Math.round(color1.g + (color2.g - color1.g) * t),
+                b: Math.round(color1.b + (color2.b - color1.b) * t),
+                a: color1.a + (color2.a - color1.a) * t
+            };
+        }
+
+        function colorToString(color) {
+            return `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a})`;
+        }
+
+        class AuroraWave {
+            constructor(y, speed, amplitude, wavelength, colorStart, colorEnd, driftSpeed) {
+                this.y = y;
+                this.speed = speed;
+                this.amplitude = amplitude;
+                this.wavelength = wavelength;
+                this.offset = Math.random() * Math.PI * 2;
+                this.currentStart = parseColor(colorStart);
+                this.currentEnd = parseColor(colorEnd);
+                this.targetStart = parseColor(colorStart);
+                this.targetEnd = parseColor(colorEnd);
+                this.opacity = 0.3 + Math.random() * 0.4;
+                this.driftSpeed = driftSpeed;
+                this.horizontalDrift = 0;
+                this.transitionProgress = 1;
+                this.transitionDuration = 2000; // 2 seconds transition
+                this.transitionStartTime = 0;
+            }
+
+            updateTargetColors(colorStart, colorEnd) {
+                this.targetStart = parseColor(colorStart);
+                this.targetEnd = parseColor(colorEnd);
+                this.transitionStartTime = Date.now();
+                this.transitionProgress = 0;
+            }
+
+            updateTransition(currentTime) {
+                if (this.transitionProgress < 1) {
+                    const elapsed = currentTime - this.transitionStartTime;
+                    this.transitionProgress = Math.min(elapsed / this.transitionDuration, 1);
+                    
+                    // Easing function for smooth transition
+                    const easeOutCubic = 1 - Math.pow(1 - this.transitionProgress, 3);
+                    
+                    this.currentStart = interpolateColor(
+                        this.currentStart,
+                        this.targetStart,
+                        easeOutCubic
+                    );
+                    this.currentEnd = interpolateColor(
+                        this.currentEnd,
+                        this.targetEnd,
+                        easeOutCubic
+                    );
+                }
+            }
+
+            draw(time) {
+                // Update color transition
+                this.updateTransition(Date.now());
+                
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+                gradient.addColorStop(0, colorToString(this.currentStart));
+                gradient.addColorStop(0.5, colorToString(this.currentEnd));
+                gradient.addColorStop(1, colorToString(this.currentStart));
+
+                ctx.beginPath();
+                
+                this.horizontalDrift += this.driftSpeed;
+
+                for (let x = 0; x <= canvas.width; x += 5) {
+                    const combinedX = (x / this.wavelength) + this.horizontalDrift;
+                    
+                    const y = this.y + 
+                        Math.sin(combinedX + time * this.speed + this.offset) * this.amplitude +
+                        Math.sin((combinedX / 2) + time * this.speed * 0.00005) * (this.amplitude * 0.5);
+                    
+                    if (x === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+
+                ctx.lineTo(canvas.width, canvas.height);
+                ctx.lineTo(0, canvas.height);
+                ctx.closePath();
+
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        const waves = [
+            new AuroraWave(canvas.height * 0.3, 0.00000008, 80, 400, 'rgba(0, 255, 136, 0.4)', 'rgba(0, 204, 255, 0.4)', 0.001),
+            new AuroraWave(canvas.height * 0.4, 0.0000001, 100, 350, 'rgba(100, 255, 200, 0.3)', 'rgba(0, 150, 255, 0.3)', -0.0005),
+            new AuroraWave(canvas.height * 0.5, 0.0000012, 90, 450, 'rgba(50, 255, 150, 0.35)', 'rgba(100, 200, 255, 0.35)', 0.0015),
+            new AuroraWave(canvas.height * 0.6, 0.0000007, 70, 380, 'rgba(150, 255, 200, 0.25)', 'rgba(50, 180, 255, 0.25)', -0.0008),
+            new AuroraWave(canvas.height * 0.7, 0.00000015, 110, 420, 'rgba(0, 255, 180, 0.3)', 'rgba(80, 220, 255, 0.3)', 0.002),
+            new AuroraWave(canvas.height * 0.8, 0.00000009, 95, 390, 'rgba(80, 255, 160, 0.35)', 'rgba(60, 200, 255, 0.35)', -0.0012),
+            new AuroraWave(canvas.height * 0.9, 0.0000011, 85, 410, 'rgba(120, 255, 180, 0.3)', 'rgba(40, 190, 255, 0.3)', 0.0007)
+        ];
+
+        function animate() {
+            const time = Date.now() * 0.001;
+            const scrollY = window.scrollY;
+
+            const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            bgGradient.addColorStop(0, '#001a33');
+            bgGradient.addColorStop(1, '#000a1a');
+            ctx.fillStyle = bgGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            waves.forEach(wave => {
+                ctx.save();
+                ctx.translate(0, -scrollY * 0.15);
+                wave.draw(time);
+                ctx.restore();
+                
+                ctx.save();
+                ctx.translate(0, canvas.height - scrollY * 0.15);
+                wave.draw(time);
+                ctx.restore();
+                
+                ctx.save();
+                ctx.translate(0, -canvas.height - scrollY * 0.15);
+                wave.draw(time);
+                ctx.restore();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        setTimeout(function() {
+            const scrollHint = document.getElementById('scrollHint');
+            const hoverHints = document.querySelectorAll('.hover-hint');
+            
+            if (scrollHint) {
+                scrollHint.style.opacity = '0';
+                scrollHint.style.transition = 'opacity 0.5s';
+                setTimeout(() => scrollHint.remove(), 500);
+            }
+            
+            hoverHints.forEach(h => {
+                h.style.opacity = '0';
+                h.style.transition = 'opacity 0.5s';
+                setTimeout(() => h.remove(), 500);
+            });
+        }, 3000);
+        
+        // const resumeBtn = document.getElementById('resumeBtn');
+        // const modal = document.getElementById('resumeModal');
+        // const cancelBtn = document.getElementById('cancelBtn');
+        // const downloadBtn = document.getElementById('downloadBtn');
+        
+        // const personalDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'aol.com', 'icloud.com', 'mail.com', 'protonmail.com', 'zoho.com', 'yandex.com', 'gmx.com', 'live.com', 'msn.com'];
+        
+        // function isBusinessEmail(email) {
+        //     const domain = email.split('@')[1]?.toLowerCase();
+        //     return domain && !personalDomains.includes(domain);
+        // }
+        
+        // resumeBtn.onclick = function() {
+        //     modal.classList.add('show');
+        // };
+        
+        // cancelBtn.onclick = function() {
+        //     modal.classList.remove('show');
+        //     document.getElementById('userName').value = '';
+        //     document.getElementById('userEmail').value = '';
+        //     document.getElementById('companyName').value = '';
+        //     document.getElementById('userMessage').value = '';
+        //     document.getElementById('errorMsg').style.display = 'none';
+        //     document.getElementById('successMsg').style.display = 'none';
+        // };
+        
+        // modal.onclick = function(e) {
+        //     if (e.target === modal) {
+        //         modal.classList.remove('show');
+        //     }
+        // };
+        
+        // downloadBtn.onclick = async function() {
+        //     const name = document.getElementById('userName').value;
+        //     const email = document.getElementById('userEmail').value;
+        //     const company = document.getElementById('companyName').value;
+        //     const message = document.getElementById('userMessage').value;
+        //     const errorMsg = document.getElementById('errorMsg');
+        //     const successMsg = document.getElementById('successMsg');
+            
+        //     errorMsg.style.display = 'none';
+        //     successMsg.style.display = 'none';
+            
+        //     if (!name || !email || !company) {
+        //         errorMsg.textContent = 'Please fill in all required fields';
+        //         errorMsg.style.display = 'block';
+        //         return;
+        //     }
+            
+        //     if (!isBusinessEmail(email)) {
+        //         errorMsg.textContent = 'Please use a business email. Personal emails (Gmail, Yahoo, etc.) are not accepted.';
+        //         errorMsg.style.display = 'block';
+        //         return;
+        //     }
+            
+        //     downloadBtn.disabled = true;
+        //     downloadBtn.textContent = 'Processing...';
+            
+        //     setTimeout(() => {
+        //         successMsg.style.display = 'block';
+                
+        //         const link = document.createElement('a');
+        //         link.href = 'data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL01lZGlhQm94IFswIDAgNTk1IDg0Ml0KPj4KZW5kb2JqCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovUmVzb3VyY2VzIDw8Ci9Gb250IDw8Ci9GMSA0IDAgUgo+Pgo+PgovQ29udGVudHMgNSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL1N1YnR5cGUgL1R5cGUxCi9CYXNlRm9udCAvVGltZXMtUm9tYW4KPj4KZW5kb2JqCjUgMCBvYmoKPDwKL0xlbmd0aCA0NAo+PgpzdHJlYW0KQlQKL0YxIDI0IFRmCjEwMCA3MDAgVGQKKFJlc3VtZSkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYNCjAwMDAwMDAwMDkgMDAwMDAgbg0KMDAwMDAwMDA1OCAwMDAwMCBuDQowMDAwMDAwMTQ1IDAwMDAwIG4NCjAwMDAwMDAyNzggMDAwMDAgbg0KMDAwMDAwMDM2NiAwMDAwMCBuDQp0cmFpbGVyCjw8Ci9TaXplIDYKL1Jvb3QgMSAwIFIKPj4Kc3RhcnR4cmVmCjQ1OQolJUVPRg==';
+        //         link.download = 'Resume.pdf';
+        //         link.click();
+                
+        //         setTimeout(() => {
+        //             modal.classList.remove('show');
+        //             document.getElementById('userName').value = '';
+        //             document.getElementById('userEmail').value = '';
+        //             document.getElementById('companyName').value = '';
+        //             document.getElementById('userMessage').value = '';
+        //             errorMsg.style.display = 'none';
+        //             successMsg.style.display = 'none';
+        //             downloadBtn.disabled = false;
+        //             downloadBtn.textContent = 'Download Resume';
+        //         }, 2000);
+        //     }, 1000);
+        // };
+        
+        const cards = [
+            document.querySelector('.card-1'),
+            document.querySelector('.card-2'),
+            document.querySelector('.card-3'),
+            document.querySelector('.card-4'),
+            document.querySelector('.card-5')
+        ];
+        
+        cards.forEach((card) => {
+            card.addEventListener('mousemove', function(e) {
+                if (!this.classList.contains('active')) return;
+                
+                const rect = this.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                const rotateX = (y - centerY) / 20;
+                const rotateY = (centerX - x) / 20;
+                
+                const currentTransform = this.style.transform;
+                const baseTransform = currentTransform.split('perspective')[0];
+                
+                this.style.transform = `${baseTransform} perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) `;
+            });
+            
+            card.addEventListener('mouseleave', function(e) {
+                const currentTransform = this.style.transform;
+                const baseTransform = currentTransform.split('perspective')[0];
+                this.style.transform = baseTransform;
+            });
+        });
+        
+        const logo = document.querySelector('.glassy-logo');
+        
+        logo.addEventListener('mousemove', function(e) {
+            const rect = this.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const rotateX = (y - centerY) / 15;
+            const rotateY = (centerX - x) / 15;
+            
+            this.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        });
+        
+        logo.addEventListener('mouseleave', function(e) {
+            this.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+        });
+
+        // Gradient switching functionality
+        const gradientToggle = document.getElementById('gradientToggle');
+        
+        let currentGradient = 1;
+        const gradientIds = [1, 2, 3, 4, 5, 6, 7, 8]; // Added 8 total gradients
+
+        const gradientThemes = {
+            1: [ // Aurora Classic
+                { start: 'rgba(0, 200, 100, 0.4)', end: 'rgba(0, 150, 200, 0.4)' },
+                { start: 'rgba(70, 200, 150, 0.3)', end: 'rgba(0, 120, 180, 0.3)' },
+                { start: 'rgba(30, 200, 120, 0.35)', end: 'rgba(70, 160, 200, 0.35)' },
+                { start: 'rgba(110, 200, 150, 0.25)', end: 'rgba(30, 140, 180, 0.25)' },
+                { start: 'rgba(0, 200, 140, 0.3)', end: 'rgba(60, 180, 200, 0.3)' },
+                { start: 'rgba(60, 200, 120, 0.35)', end: 'rgba(40, 160, 180, 0.35)' },
+                { start: 'rgba(90, 200, 140, 0.3)', end: 'rgba(20, 150, 180, 0.3)' }
+            ],
+            2: [ // Rainbow Dream (brighter HSL)
+                { start: 'rgba(179, 136, 255, 0.5)', end: 'rgba(102, 194, 255, 0.5)' },   // Bright violet to strong sky blue
+                { start: 'rgba(102, 194, 255, 0.4)', end: 'rgba(102, 255, 204, 0.4)' },   // Strong sky blue to bright mint
+                { start: 'rgba(102, 255, 204, 0.45)', end: 'rgba(255, 221, 102, 0.45)' }, // Bright mint to warm yellow
+                { start: 'rgba(255, 221, 102, 0.35)', end: 'rgba(255, 102, 122, 0.35)' }, // Warm yellow to red
+                { start: 'rgba(255, 102, 122, 0.4)', end: 'rgba(179, 136, 255, 0.4)' },   // Red back to bright violet
+                { start: 'rgba(179, 136, 255, 0.45)', end: 'rgba(102, 194, 255, 0.45)' }, // Bright violet to strong sky blue
+                { start: 'rgba(102, 194, 255, 0.4)', end: 'rgba(102, 255, 204, 0.4)' }    // Strong sky blue to bright mint
+            ],
+            3: [ // Purple Dream
+                { start: 'rgba(138, 43, 226, 0.5)', end: 'rgba(75, 0, 130, 0.5)' },
+                { start: 'rgba(150, 100, 255, 0.4)', end: 'rgba(100, 50, 200, 0.4)' },
+                { start: 'rgba(160, 80, 255, 0.45)', end: 'rgba(120, 40, 220, 0.45)' },
+                { start: 'rgba(180, 120, 255, 0.35)', end: 'rgba(90, 30, 180, 0.35)' },
+                { start: 'rgba(170, 50, 255, 0.4)', end: 'rgba(110, 80, 220, 0.4)' },
+                { start: 'rgba(190, 90, 255, 0.45)', end: 'rgba(130, 60, 200, 0.45)' },
+                { start: 'rgba(200, 110, 255, 0.4)', end: 'rgba(140, 70, 190, 0.4)' }
+            ],
+            4: [ // Ocean Breeze (enhanced)
+                { start: 'rgba(0, 200, 200, 0.5)', end: 'rgba(0, 100, 180, 0.5)' },
+                { start: 'rgba(40, 200, 200, 0.4)', end: 'rgba(40, 120, 180, 0.4)' },
+                { start: 'rgba(80, 200, 200, 0.45)', end: 'rgba(80, 140, 180, 0.45)' },
+                { start: 'rgba(120, 200, 200, 0.35)', end: 'rgba(60, 160, 180, 0.35)' },
+                { start: 'rgba(0, 190, 200, 0.4)', end: 'rgba(60, 130, 180, 0.4)' },
+                { start: 'rgba(60, 200, 200, 0.45)', end: 'rgba(40, 150, 180, 0.45)' },
+                { start: 'rgba(90, 200, 200, 0.4)', end: 'rgba(20, 140, 180, 0.4)' }
+            ],
+            5: [ // Sunset Glow (warm colors, great with white text)
+                { start: 'rgba(255, 95, 109, 0.5)', end: 'rgba(255, 195, 113, 0.5)' },   // Coral to peach
+                { start: 'rgba(255, 195, 113, 0.4)', end: 'rgba(255, 153, 102, 0.4)' },   // Peach to orange
+                { start: 'rgba(255, 153, 102, 0.45)', end: 'rgba(255, 94, 98, 0.45)' },   // Orange to pink
+                { start: 'rgba(255, 94, 98, 0.35)', end: 'rgba(255, 142, 83, 0.35)' },    // Pink to tangerine
+                { start: 'rgba(255, 142, 83, 0.4)', end: 'rgba(255, 107, 107, 0.4)' },    // Tangerine to coral
+                { start: 'rgba(255, 107, 107, 0.45)', end: 'rgba(255, 167, 38, 0.45)' },  // Coral to gold
+                { start: 'rgba(255, 167, 38, 0.4)', end: 'rgba(255, 95, 109, 0.4)' }      // Gold back to coral
+            ],
+            6: [ // Forest Mist (cool greens, great with white text)
+                { start: 'rgba(29, 151, 108, 0.5)', end: 'rgba(147, 249, 185, 0.5)' },    // Dark green to mint
+                { start: 'rgba(147, 249, 185, 0.4)', end: 'rgba(86, 171, 47, 0.4)' },     // Mint to forest green
+                { start: 'rgba(86, 171, 47, 0.45)', end: 'rgba(168, 224, 99, 0.45)' },    // Forest green to lime
+                { start: 'rgba(168, 224, 99, 0.35)', end: 'rgba(118, 184, 82, 0.35)' },   // Lime to olive
+                { start: 'rgba(118, 184, 82, 0.4)', end: 'rgba(60, 165, 92, 0.4)' },      // Olive to emerald
+                { start: 'rgba(60, 165, 92, 0.45)', end: 'rgba(17, 153, 142, 0.45)' },    // Emerald to teal
+                { start: 'rgba(17, 153, 142, 0.4)', end: 'rgba(29, 151, 108, 0.4)' }      // Teal back to dark green
+            ],
+            7: [ // Cosmic Purple (deep purples, great with white text)
+                { start: 'rgba(106, 13, 173, 0.5)', end: 'rgba(162, 155, 254, 0.5)' },    // Deep purple to lavender
+                { start: 'rgba(162, 155, 254, 0.4)', end: 'rgba(108, 92, 231, 0.4)' },    // Lavender to violet
+                { start: 'rgba(108, 92, 231, 0.45)', end: 'rgba(179, 136, 255, 0.45)' },  // Violet to lilac
+                { start: 'rgba(179, 136, 255, 0.35)', end: 'rgba(140, 82, 255, 0.35)' },  // Lilac to royal purple
+                { start: 'rgba(140, 82, 255, 0.4)', end: 'rgba(103, 58, 183, 0.4)' },     // Royal purple to indigo
+                { start: 'rgba(103, 58, 183, 0.45)', end: 'rgba(156, 39, 176, 0.45)' },   // Indigo to magenta
+                { start: 'rgba(156, 39, 176, 0.4)', end: 'rgba(106, 13, 173, 0.4)' }      // Magenta back to deep purple
+            ],
+            8: [ // Arctic Ice (cool blues, great with white text)
+                { start: 'rgba(0, 180, 255, 0.5)', end: 'rgba(200, 230, 255, 0.5)' },     // Bright blue to ice blue
+                { start: 'rgba(200, 230, 255, 0.4)', end: 'rgba(100, 200, 255, 0.4)' },   // Ice blue to sky blue
+                { start: 'rgba(100, 200, 255, 0.45)', end: 'rgba(173, 216, 230, 0.45)' }, // Sky blue to light blue
+                { start: 'rgba(173, 216, 230, 0.35)', end: 'rgba(135, 206, 235, 0.35)' }, // Light blue to steel blue
+                { start: 'rgba(135, 206, 235, 0.4)', end: 'rgba(70, 130, 180, 0.4)' },    // Steel blue to navy
+                { start: 'rgba(70, 130, 180, 0.45)', end: 'rgba(176, 224, 230, 0.45)' },  // Navy to powder blue
+                { start: 'rgba(176, 224, 230, 0.4)', end: 'rgba(0, 180, 255, 0.4)' }      // Powder blue back to bright blue
+            ]
+        };
+
+        // Gradient names for tooltip
+        const gradientNames = {
+            1: "Aurora Classic",
+            2: "Rainbow Dream", 
+            3: "Purple Dream",
+            4: "Ocean Breeze",
+            5: "Sunset Glow",
+            6: "Forest Mist",
+            7: "Cosmic Purple",
+            8: "Arctic Ice"
+        };
+
+        gradientToggle.addEventListener('click', () => {
+            // Find current index and move to next
+            const currentIndex = gradientIds.indexOf(currentGradient);
+            const nextIndex = (currentIndex + 1) % gradientIds.length;
+            const newGradient = gradientIds[nextIndex];
+            
+            // Update wave colors with smooth transition
+            const theme = gradientThemes[newGradient];
+            waves.forEach((wave, index) => {
+                wave.updateTargetColors(theme[index].start, theme[index].end);
+            });
+            
+            currentGradient = newGradient;
+            
+            // Update tooltip with gradient name
+            gradientToggle.title = gradientNames[newGradient];
+            
+            // Add a visual feedback animation (logo always stays "ty")
+            gradientToggle.style.transform = 'scale(0.9)';
+            setTimeout(() => {
+                gradientToggle.style.transform = 'scale(1)';
+            }, 100);
+        });
+
+        const navDots = document.querySelectorAll('.nav-dot');
+        
+        navDots.forEach((dot, index) => {
+            dot.addEventListener('click', () => {
+                const wh = window.innerHeight;
+                const cardScrollPositions = [
+                    0,           // Card 5 (Thank You) - top
+                    wh * 1.15,   // Card 4 (Northern Lights)
+                    wh * 1.95,   // Card 3 (Magic)
+                    wh * 2.75,   // Card 2 (Wonder)
+                    wh * 4       // Card 1 (Discovery) - bottom
+                ];
+                
+                const targetScroll = cardScrollPositions[index];
+                window.scrollTo({
+                    top: targetScroll,
+                    behavior: 'smooth'
+                });
+            });
+        });
+        
+        function updateActiveNavDot() {
+            const scrollY = window.scrollY;
+            const wh = window.innerHeight;
+            
+            navDots.forEach(dot => dot.classList.remove('active'));
+            
+            if (scrollY < wh * 0.4) {
+                navDots[0].classList.add('active'); // Card 5
+            } else if (scrollY < wh * 1.2) {
+                navDots[1].classList.add('active'); // Card 4
+            } else if (scrollY < wh * 2.0) {
+                navDots[2].classList.add('active'); // Card 3
+            } else if (scrollY < wh * 2.8) {
+                navDots[3].classList.add('active'); // Card 2
+            } else {
+                navDots[4].classList.add('active'); // Card 1
+            }
+        }
+
+        const maxScroll = window.innerHeight * 4;
+        let isAtEnd = false;
+        
+        window.addEventListener('scroll', () => {
+            let scrollY = window.scrollY;
+            const windowHeight = window.innerHeight;
+            const isMobile = window.innerWidth <= 768;
+            
+            if (scrollY > maxScroll) {
+                const excess = scrollY - maxScroll;
+                const pullStrength = Math.min(excess / 3, 150);
+                scrollY = maxScroll + pullStrength;
+                
+                if (!isAtEnd) {
+                    isAtEnd = true;
+                    setTimeout(() => {
+                        window.scrollTo({ top: maxScroll, behavior: 'smooth' });
+                        isAtEnd = false;
+                    }, 100);
+                }
+            }
+            
+            cards.forEach(card => card.classList.remove('active'));
+            
+            const card5Progress = Math.min(scrollY / windowHeight, 1);
+            if (scrollY < windowHeight * 0.8) {
+                const card5MoveY = -scrollY * 1.5;
+                const card5Opacity = Math.max(0, 1 - card5Progress);
+                cards[4].style.transform = `translate(-50%, calc(-40% + ${card5MoveY}px))`;
+                cards[4].style.opacity = card5Opacity;
+                cards[4].classList.add('active');
+            } else {
+                cards[4].style.opacity = 0;
+            }
+            
+            const card4Start = windowHeight * 0.8;
+            const card4Progress = Math.max(0, Math.min((scrollY - card4Start) / windowHeight, 1));
+            let card4X = isMobile ? 0 : -20, card4Y = isMobile ? 20 : -10, card4Scale = 0.99, card4Opacity = 0.9, card4Rotate = isMobile ? 0 : -1.5;
+            
+            if (scrollY < card4Start) {
+                card4X = isMobile ? 0 : -20; 
+                card4Y = isMobile ? 20 : -10; 
+                card4Scale = 0.99; 
+                card4Opacity = 0.9; 
+                card4Rotate = isMobile ? 0 : -1.5;
+            } else if (card4Progress < 0.3) {
+                const centerProgress = card4Progress / 0.3;
+                card4X = isMobile ? 0 : -20 * (1 - centerProgress);
+                card4Y = isMobile ? 20 * (1 - centerProgress) : -10 * (1 - centerProgress);
+                card4Scale = 0.99 + (0.01 * centerProgress);
+                card4Opacity = 0.9 + (0.1 * centerProgress);
+                card4Rotate = isMobile ? 0 : -1.5 * (1 - centerProgress);
+                cards[3].classList.add('active');
+            } else if (card4Progress < 0.7) {
+                card4X = 0; card4Y = 0; card4Scale = 1; card4Opacity = 1; card4Rotate = 0;
+                cards[3].classList.add('active');
+            } else {
+                const exitProgress = (card4Progress - 0.7) / 0.3;
+                if (isMobile) {
+                    card4X = 0;
+                    card4Y = -windowHeight * 2 * exitProgress;
+                } else {
+                    card4X = -windowHeight * 2 * exitProgress;
+                    card4Y = 0;
+                }
+                card4Opacity = Math.max(0, 1 - exitProgress);
+            }
+            
+            cards[3].style.transform = `translate(calc(-50% + ${card4X}px), calc(-40% + ${card4Y}px)) scale(${card4Scale}) rotate(${card4Rotate}deg)`;
+            cards[3].style.opacity = card4Opacity;
+            
+            const card3Start = windowHeight * 1.6;
+            const card3Progress = Math.max(0, Math.min((scrollY - card3Start) / windowHeight, 1));
+            let card3X = isMobile ? 0 : -40, card3Y = isMobile ? 40 : -20, card3Scale = 0.97, card3Opacity = 0.8, card3Rotate = isMobile ? 0 : -3;
+            
+            if (scrollY < card3Start) {
+                card3X = isMobile ? 0 : -40; 
+                card3Y = isMobile ? 40 : -20; 
+                card3Scale = 0.97; 
+                card3Opacity = 0.8; 
+                card3Rotate = isMobile ? 0 : -3;
+            } else if (card3Progress < 0.3) {
+                const centerProgress = card3Progress / 0.3;
+                card3X = isMobile ? 0 : -40 * (1 - centerProgress);
+                card3Y = isMobile ? 40 * (1 - centerProgress) : -20 * (1 - centerProgress);
+                card3Scale = 0.97 + (0.03 * centerProgress);
+                card3Opacity = 0.8 + (0.2 * centerProgress);
+                card3Rotate = isMobile ? 0 : -3 * (1 - centerProgress);
+                cards[2].classList.add('active');
+            } else if (card3Progress < 0.7) {
+                card3X = 0; card3Y = 0; card3Scale = 1; card3Opacity = 1; card3Rotate = 0;
+                cards[2].classList.add('active');
+            } else {
+                const exitProgress = (card3Progress - 0.7) / 0.3;
+                if (isMobile) {
+                    card3X = 0;
+                    card3Y = -windowHeight * 2 * exitProgress;
+                } else {
+                    card3X = windowHeight * 2 * exitProgress;
+                    card3Y = 0;
+                }
+                card3Opacity = Math.max(0, 1 - exitProgress);
+            }
+            
+            cards[2].style.transform = `translate(calc(-50% + ${card3X}px), calc(-40% + ${card3Y}px)) scale(${card3Scale}) rotate(${card3Rotate}deg)`;
+            cards[2].style.opacity = card3Opacity;
+            
+            const card2Start = windowHeight * 2.4;
+            const card2Progress = Math.max(0, Math.min((scrollY - card2Start) / windowHeight, 1));
+            let card2X = isMobile ? 0 : -60, card2Y = isMobile ? 60 : -30, card2Scale = 0.95, card2Opacity = 0.7, card2Rotate = isMobile ? 0 : -4.5;
+            
+            if (scrollY < card2Start) {
+                card2X = isMobile ? 0 : -60; 
+                card2Y = isMobile ? 60 : -30; 
+                card2Scale = 0.95; 
+                card2Opacity = 0.7; 
+                card2Rotate = isMobile ? 0 : -4.5;
+            } else if (card2Progress < 0.3) {
+                const centerProgress = card2Progress / 0.3;
+                card2X = isMobile ? 0 : -60 * (1 - centerProgress);
+                card2Y = isMobile ? 60 * (1 - centerProgress) : -30 * (1 - centerProgress);
+                card2Scale = 0.95 + (0.05 * centerProgress);
+                card2Opacity = 0.7 + (0.3 * centerProgress);
+                card2Rotate = isMobile ? 0 : -4.5 * (1 - centerProgress);
+                cards[1].classList.add('active');
+            } else if (card2Progress < 0.7) {
+                card2X = 0; card2Y = 0; card2Scale = 1; card2Opacity = 1; card2Rotate = 0;
+                cards[1].classList.add('active');
+            } else {
+                const exitProgress = (card2Progress - 0.7) / 0.3;
+                card2X = 0;
+                card2Y = isMobile ? -windowHeight * 2 * exitProgress : windowHeight * 2 * exitProgress;
+                card2Opacity = Math.max(0, 1 - exitProgress);
+            }
+            
+            cards[1].style.transform = `translate(calc(-50% + ${card2X}px), calc(-40% + ${card2Y}px)) scale(${card2Scale}) rotate(${card2Rotate}deg)`;
+            cards[1].style.opacity = card2Opacity;
+            
+            const card1Start = windowHeight * 3.2;
+            const card1Progress = Math.max(0, Math.min((scrollY - card1Start) / windowHeight, 1));
+            let card1X = isMobile ? 0 : -80, card1Y = isMobile ? 80 : -40, card1Scale = 0.93, card1Opacity = 0.6, card1Rotate = isMobile ? 0 : -6;
+            
+            if (scrollY < card1Start) {
+                card1X = isMobile ? 0 : -80; 
+                card1Y = isMobile ? 80 : -40; 
+                card1Scale = 0.93; 
+                card1Opacity = 0.6; 
+                card1Rotate = isMobile ? 0 : -6;
+            } else if (card1Progress < 0.5) {
+                const centerProgress = card1Progress / 0.5;
+                card1X = isMobile ? 0 : -80 * (1 - centerProgress);
+                card1Y = isMobile ? 80 * (1 - centerProgress) : -40 * (1 - centerProgress);
+                card1Scale = 0.93 + (0.07 * centerProgress);
+                card1Opacity = 0.6 + (0.4 * centerProgress);
+                card1Rotate = isMobile ? 0 : -6 * (1 - centerProgress);
+                cards[0].classList.add('active');
+            } else {
+                const overScroll = Math.max(0, scrollY - maxScroll);
+                const pullEffect = Math.min(overScroll / 10, 30);
+                card1X = 0;
+                card1Y = 0;
+                card1Scale = 1;
+                card1Opacity = 1;
+                card1Rotate = 0;
+                cards[0].classList.add('active');
+            }
+            
+            cards[0].style.transform = `translate(calc(-50% + ${card1X}px), calc(-40% + ${card1Y}px)) scale(${card1Scale}) rotate(${card1Rotate}deg)`;
+            cards[0].style.opacity = card1Opacity;
+            
+            updateActiveNavDot();
+        });
+        
+        function initializeCardPositions() {
+            const isMobile = window.innerWidth <= 768;
+            
+            // Set initial transforms for all cards
+            cards[4].style.transform = 'translate(-50%, -40%)';
+            cards[4].style.opacity = '1';
+            
+            if (isMobile) {
+                cards[3].style.transform = 'translate(-50%, calc(-40% + 20px)) scale(0.99)';
+                cards[2].style.transform = 'translate(-50%, calc(-40% + 40px)) scale(0.97)';
+                cards[1].style.transform = 'translate(-50%, calc(-40% + 60px)) scale(0.95)';
+                cards[0].style.transform = 'translate(-50%, calc(-40% + 80px)) scale(0.93)';
+            } else {
+                cards[3].style.transform = 'translate(calc(-50% + -20px), calc(-40% + -10px)) scale(0.99) rotate(-1.5deg)';
+                cards[2].style.transform = 'translate(calc(-50% + -40px), calc(-40% + -20px)) scale(0.97) rotate(-3deg)';
+                cards[1].style.transform = 'translate(calc(-50% + -60px), calc(-40% + -30px)) scale(0.95) rotate(-4.5deg)';
+                cards[0].style.transform = 'translate(calc(-50% + -80px), calc(-40% + -40px)) scale(0.93) rotate(-6deg)';
+            }
+            
+            cards[3].style.opacity = '0.9';
+            cards[2].style.opacity = '0.8';
+            cards[1].style.opacity = '0.7';
+            cards[0].style.opacity = '0.6';
+        }
+        
+        // Initialize scroll position to top (card 5)
+        initializeCardPositions();  // ADD THIS CALL
+        setTimeout(() => {
+            window.scrollTo(0, 0);
+            updateActiveNavDot();
+        }, 100);
+    </script>
+</body>
+</html>
