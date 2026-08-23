@@ -1,0 +1,3002 @@
+#!/usr/bin/env python3
+
+"""
+AUDITOR DAILY CALL SAMPLING
+===========================
+
+Run:
+    python auditor_sampling.py
+
+No date argument is required.
+
+The program automatically uses today's system date.
+
+INPUT FILES
+-----------
+
+1. agent_auditor_mapping.csv
+
+    auditor_id,agent_id
+
+
+2. auditor_working_days.csv
+
+    auditor_id
+    month
+    category
+    required_calls
+    working_days
+    min_call_length
+    max_call_length
+    weekly_rule_within_category
+    same_day_rule_across_category
+    same_day_within_category
+    vacation_date
+    vacation_start_date
+    vacation_end_date
+
+
+3. daily_calls.csv
+
+    call_id
+    agent_id
+    call_date
+    run_date
+    category
+    call_length
+
+
+OUTPUT
+------
+
+One Excel workbook per month:
+
+    output/audit_sampling_YYYY-MM.xlsx
+
+
+Excel sheets:
+
+    Selections
+        Permanent month-to-date selection history.
+
+    Daily_Output
+        All daily selections appended into one sheet.
+
+    Run_Anchor
+        First run date for the month.
+
+    Audit_Stats
+        Current monthly completion status.
+
+
+IMPORTANT WEEK RULE
+-------------------
+
+Sampling weeks NEVER cross a calendar month.
+
+Example:
+
+Anchor:
+    2026-08-03
+
+August:
+
+    Week 1 = Aug 03 - Aug 09
+    Week 2 = Aug 10 - Aug 16
+    Week 3 = Aug 17 - Aug 23
+    Week 4 = Aug 24 - Aug 30
+    Week 5 = Aug 31 only
+
+September starts a new month and therefore
+a new Week 1.
+
+No August Week 5 can contain September dates.
+
+
+RERUN BEHAVIOR
+--------------
+
+If today's job has already been run:
+
+    1. Remove today's previous selections.
+    2. Keep all previous days.
+    3. Recalculate today's selections.
+    4. Save today's new selections.
+
+This makes the process safe to rerun.
+
+
+VACATION
+--------
+
+Vacation dates do NOT prevent selection.
+
+They are used to influence pacing.
+
+Example:
+
+    working_days = 21
+
+    vacation_start_date = 2026-08-18
+    vacation_end_date   = 2026-08-21
+
+The program understands that the auditor has
+less practical time toward the end of the month
+and therefore increases pacing pressure before
+the vacation period.
+
+If no vacation is entered, normal Monday-Saturday
+pacing is used.
+
+
+CONSTRAINTS
+-----------
+
+weekly_rule_within_category
+    Prevents multiple selections for the same
+    auditor + agent + category within the same
+    sampling week.
+
+same_day_rule_across_category
+    Prevents bind and policy change selections
+    for the same agent on the same calendar day.
+
+same_day_within_category
+    Prevents multiple selections for the same
+    agent + category on the same calendar day.
+
+
+RELAXATION LADDER
+-----------------
+
+LEVEL 0:
+    All configured constraints.
+
+LEVEL 1:
+    Relax weekly_rule_within_category.
+
+LEVEL 2:
+    Relax same_day_rule_across_category.
+
+LEVEL 3:
+    Relax same_day_within_category.
+
+LEVEL 4:
+    Relax call-length threshold.
+
+The level is stored with every selection.
+
+
+PACING
+------
+
+Pacing and constraint relaxation are separate.
+
+Pacing determines whether the pair is due
+for another selection.
+
+Relaxation only happens when the quota is
+genuinely at risk.
+
+The program therefore does not immediately
+relax constraints simply because today's call
+does not fit.
+
+
+CALL LENGTH
+-----------
+
+Normal selection:
+
+    min_call_length <= call_length <= max_call_length
+
+Among qualifying calls, the shortest call is selected.
+
+At LEVEL 4, the length threshold is relaxed.
+The call requiring the smallest movement outside
+the configured range is selected.
+
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import pandas as pd
+from openpyxl import load_workbook
+
+
+# ============================================================
+# FILE CONFIGURATION
+# ============================================================
+
+MAPPING_FILE = "agent_auditor_mapping.csv"
+WORKING_DAYS_FILE = "auditor_working_days.csv"
+CALLS_FILE = "daily_calls.csv"
+
+OUTPUT_DIR = Path("output")
+
+
+# ============================================================
+# CATEGORIES
+# ============================================================
+
+CATEGORIES = {
+    "bind",
+    "policy change",
+}
+
+
+# ============================================================
+# EXCEL COLUMNS
+# ============================================================
+
+SELECTION_COLUMNS = [
+    "run_date",
+    "auditor_id",
+    "agent_id",
+    "category",
+    "call_id",
+    "call_date",
+    "call_length",
+    "sampling_week",
+    "relaxation_level",
+    "length_relaxed",
+    "selection_reason",
+]
+
+
+DAILY_OUTPUT_COLUMNS = [
+    "run_date",
+    "auditor_id",
+    "agent_id",
+    "category",
+    "call_id",
+    "call_date",
+    "call_length",
+    "sampling_week",
+    "relaxation_level",
+    "length_relaxed",
+    "required_calls",
+    "working_days",
+    "min_call_length",
+    "max_call_length",
+    "weekly_rule_within_category",
+    "same_day_rule_across_category",
+    "same_day_within_category",
+    "selection_reason",
+]
+
+
+# ============================================================
+# DATA CLASSES
+# ============================================================
+
+@dataclass(frozen=True)
+class PairKey:
+    auditor_id: str
+    agent_id: str
+    category: str
+
+
+@dataclass
+class AuditorConfig:
+    auditor_id: str
+    month: str
+    category: str
+
+    required_calls: int
+    working_days: int
+
+    min_call_length: Optional[float]
+    max_call_length: Optional[float]
+
+    weekly_rule_within_category: bool
+    same_day_rule_across_category: bool
+    same_day_within_category: bool
+
+    vacation_dates: set
+
+
+@dataclass
+class SelectionResult:
+    call: Optional[pd.Series]
+    relaxation_level: Optional[str]
+    length_relaxed: bool
+    reason: str
+
+
+# ============================================================
+# BASIC HELPERS
+# ============================================================
+
+def normalize_category(value):
+
+    return (
+        str(value)
+        .strip()
+        .lower()
+        .replace("_", " ")
+    )
+
+
+def parse_bool(value):
+
+    if isinstance(value, bool):
+        return value
+
+    if pd.isna(value):
+        return False
+
+    value = (
+        str(value)
+        .strip()
+        .lower()
+    )
+
+    if value in {
+        "true",
+        "yes",
+        "y",
+        "1",
+        "on",
+    }:
+        return True
+
+    if value in {
+        "false",
+        "no",
+        "n",
+        "0",
+        "off",
+    }:
+        return False
+
+    raise ValueError(
+        f"Invalid TRUE/FALSE value: {value}"
+    )
+
+
+def parse_optional_date(value):
+
+    if pd.isna(value):
+        return None
+
+    value = str(value).strip()
+
+    if not value:
+        return None
+
+    return pd.Timestamp(
+        pd.to_datetime(value)
+    ).normalize()
+
+
+def month_from_date(date):
+
+    return pd.Timestamp(
+        date
+    ).strftime("%Y-%m")
+
+
+# ============================================================
+# VACATION
+# ============================================================
+
+def build_vacation_dates(
+    vacation_date,
+    vacation_start_date,
+    vacation_end_date,
+):
+    """
+    Supports:
+
+        Single date:
+            vacation_date
+
+        Range:
+            vacation_start_date
+            vacation_end_date
+
+        Both:
+            vacation_date
+            vacation_start_date
+            vacation_end_date
+    """
+
+    dates = set()
+
+    single = parse_optional_date(
+        vacation_date
+    )
+
+    if single is not None:
+        dates.add(single)
+
+    start = parse_optional_date(
+        vacation_start_date
+    )
+
+    end = parse_optional_date(
+        vacation_end_date
+    )
+
+    if start is not None and end is None:
+        raise ValueError(
+            "vacation_start_date requires "
+            "vacation_end_date"
+        )
+
+    if end is not None and start is None:
+        raise ValueError(
+            "vacation_end_date requires "
+            "vacation_start_date"
+        )
+
+    if start is not None and end is not None:
+
+        if end < start:
+            raise ValueError(
+                "Vacation end date cannot "
+                "be before vacation start date."
+            )
+
+        for date in pd.date_range(
+            start,
+            end,
+            freq="D",
+        ):
+            dates.add(
+                pd.Timestamp(date).normalize()
+            )
+
+    return dates
+
+
+# ============================================================
+# LOAD AGENT/AUDITOR MAPPING
+# ============================================================
+
+def load_mapping():
+
+    df = pd.read_csv(
+        MAPPING_FILE
+    )
+
+    required = {
+        "auditor_id",
+        "agent_id",
+    }
+
+    missing = (
+        required
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            f"{MAPPING_FILE} is missing "
+            f"columns: {sorted(missing)}"
+        )
+
+    df["auditor_id"] = (
+        df["auditor_id"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["agent_id"] = (
+        df["agent_id"]
+        .astype(str)
+        .str.strip()
+    )
+
+    return df.drop_duplicates()
+
+
+# ============================================================
+# LOAD AUDITOR CONFIGURATION
+# ============================================================
+
+def load_configs():
+
+    df = pd.read_csv(
+        WORKING_DAYS_FILE
+    )
+
+    required = {
+        "auditor_id",
+        "month",
+        "category",
+        "required_calls",
+        "working_days",
+        "min_call_length",
+        "max_call_length",
+        "weekly_rule_within_category",
+        "same_day_rule_across_category",
+        "same_day_within_category",
+        "vacation_date",
+        "vacation_start_date",
+        "vacation_end_date",
+    }
+
+    missing = (
+        required
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            f"{WORKING_DAYS_FILE} is missing "
+            f"columns: {sorted(missing)}"
+        )
+
+    df["auditor_id"] = (
+        df["auditor_id"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["month"] = (
+        df["month"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["category"] = (
+        df["category"]
+        .apply(normalize_category)
+    )
+
+    df["required_calls"] = pd.to_numeric(
+        df["required_calls"],
+        errors="raise",
+    ).astype(int)
+
+    df["working_days"] = pd.to_numeric(
+        df["working_days"],
+        errors="raise",
+    ).astype(int)
+
+    if (df["required_calls"] < 0).any():
+        raise ValueError(
+            "required_calls cannot be negative."
+        )
+
+    if (df["working_days"] < 0).any():
+        raise ValueError(
+            "working_days cannot be negative."
+        )
+
+    df["min_call_length"] = pd.to_numeric(
+        df["min_call_length"],
+        errors="coerce",
+    )
+
+    df["max_call_length"] = pd.to_numeric(
+        df["max_call_length"],
+        errors="coerce",
+    )
+
+    for column in [
+        "weekly_rule_within_category",
+        "same_day_rule_across_category",
+        "same_day_within_category",
+    ]:
+        df[column] = (
+            df[column]
+            .apply(parse_bool)
+        )
+
+    configs = {}
+
+    for row in df.itertuples(
+        index=False
+    ):
+
+        key = (
+            str(row.auditor_id),
+            str(row.month),
+            str(row.category),
+        )
+
+        if key in configs:
+            raise ValueError(
+                f"Duplicate auditor configuration: "
+                f"{key}"
+            )
+
+        configs[key] = AuditorConfig(
+            auditor_id=str(
+                row.auditor_id
+            ),
+
+            month=str(
+                row.month
+            ),
+
+            category=str(
+                row.category
+            ),
+
+            required_calls=int(
+                row.required_calls
+            ),
+
+            working_days=int(
+                row.working_days
+            ),
+
+            min_call_length=(
+                None
+                if pd.isna(
+                    row.min_call_length
+                )
+                else float(
+                    row.min_call_length
+                )
+            ),
+
+            max_call_length=(
+                None
+                if pd.isna(
+                    row.max_call_length
+                )
+                else float(
+                    row.max_call_length
+                )
+            ),
+
+            weekly_rule_within_category=(
+                bool(
+                    row.weekly_rule_within_category
+                )
+            ),
+
+            same_day_rule_across_category=(
+                bool(
+                    row.same_day_rule_across_category
+                )
+            ),
+
+            same_day_within_category=(
+                bool(
+                    row.same_day_within_category
+                )
+            ),
+
+            vacation_dates=build_vacation_dates(
+                row.vacation_date,
+                row.vacation_start_date,
+                row.vacation_end_date,
+            ),
+        )
+
+    return configs
+
+
+# ============================================================
+# LOAD CALL DATA
+# ============================================================
+
+def load_calls():
+
+    df = pd.read_csv(
+        CALLS_FILE
+    )
+
+    required = {
+        "call_id",
+        "agent_id",
+        "call_date",
+        "run_date",
+        "category",
+        "call_length",
+    }
+
+    missing = (
+        required
+        - set(df.columns)
+    )
+
+    if missing:
+        raise ValueError(
+            f"{CALLS_FILE} is missing "
+            f"columns: {sorted(missing)}"
+        )
+
+    df["call_id"] = (
+        df["call_id"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["agent_id"] = (
+        df["agent_id"]
+        .astype(str)
+        .str.strip()
+    )
+
+    df["call_date"] = (
+        pd.to_datetime(
+            df["call_date"],
+            errors="raise",
+        )
+        .dt.normalize()
+    )
+
+    df["run_date"] = (
+        pd.to_datetime(
+            df["run_date"],
+            errors="raise",
+        )
+        .dt.normalize()
+    )
+
+    df["category"] = (
+        df["category"]
+        .apply(normalize_category)
+    )
+
+    df["call_length"] = pd.to_numeric(
+        df["call_length"],
+        errors="coerce",
+    )
+
+    df = df.dropna(
+        subset=[
+            "call_id",
+            "agent_id",
+            "call_date",
+            "run_date",
+            "call_length",
+        ]
+    ).copy()
+
+    return df
+
+
+# ============================================================
+# WORKBOOK
+# ============================================================
+
+def workbook_path(month):
+
+    OUTPUT_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    return (
+        OUTPUT_DIR
+        / f"audit_sampling_{month}.xlsx"
+    )
+
+
+def create_workbook_if_needed(
+    path,
+    run_date,
+):
+
+    if path.exists():
+        return
+
+    with pd.ExcelWriter(
+        path,
+        engine="openpyxl",
+    ) as writer:
+
+        pd.DataFrame(
+            columns=SELECTION_COLUMNS
+        ).to_excel(
+            writer,
+            sheet_name="Selections",
+            index=False,
+        )
+
+        pd.DataFrame(
+            columns=DAILY_OUTPUT_COLUMNS
+        ).to_excel(
+            writer,
+            sheet_name="Daily_Output",
+            index=False,
+        )
+
+        pd.DataFrame(
+            [{
+                "first_run_date": (
+                    run_date.date()
+                )
+            }]
+        ).to_excel(
+            writer,
+            sheet_name="Run_Anchor",
+            index=False,
+        )
+
+        pd.DataFrame().to_excel(
+            writer,
+            sheet_name="Audit_Stats",
+            index=False,
+        )
+
+
+# ============================================================
+# LOAD EXCEL STATE
+# ============================================================
+
+def load_selections(path):
+
+    try:
+
+        df = pd.read_excel(
+            path,
+            sheet_name="Selections",
+        )
+
+    except Exception:
+
+        return pd.DataFrame(
+            columns=SELECTION_COLUMNS
+        )
+
+    if df.empty:
+        return pd.DataFrame(
+            columns=SELECTION_COLUMNS
+        )
+
+    df["run_date"] = (
+        pd.to_datetime(
+            df["run_date"]
+        ).dt.normalize()
+    )
+
+    df["call_date"] = (
+        pd.to_datetime(
+            df["call_date"]
+        ).dt.normalize()
+    )
+
+    df["category"] = (
+        df["category"]
+        .apply(normalize_category)
+    )
+
+    df["call_id"] = (
+        df["call_id"]
+        .astype(str)
+    )
+
+    df["agent_id"] = (
+        df["agent_id"]
+        .astype(str)
+    )
+
+    df["auditor_id"] = (
+        df["auditor_id"]
+        .astype(str)
+    )
+
+    return df
+
+
+def load_run_anchor(path):
+
+    df = pd.read_excel(
+        path,
+        sheet_name="Run_Anchor",
+    )
+
+    if df.empty:
+        raise ValueError(
+            "Run_Anchor sheet is empty."
+        )
+
+    return pd.Timestamp(
+        df.iloc[0]["first_run_date"]
+    ).normalize()
+
+
+# ============================================================
+# RERUN SUPPORT
+# ============================================================
+
+def remove_run_date(
+    selections,
+    run_date,
+):
+
+    if selections.empty:
+        return selections
+
+    return selections[
+        selections["run_date"]
+        != run_date
+    ].copy().reset_index(
+        drop=True
+    )
+
+
+# ============================================================
+# CALL DAYS
+# ============================================================
+
+def is_call_day(date):
+
+    """
+    Calls are available Monday-Saturday.
+
+    Monday = 0
+    ...
+    Saturday = 5
+    Sunday = 6
+    """
+
+    return (
+        pd.Timestamp(date).weekday()
+        <= 5
+    )
+
+
+# ============================================================
+# MONTH BOUNDARY
+# ============================================================
+
+def month_start(date):
+
+    return pd.Timestamp(
+        date
+    ).normalize().replace(
+        day=1
+    )
+
+
+def month_end(date):
+
+    date = pd.Timestamp(
+        date
+    ).normalize()
+
+    return (
+        date
+        + pd.offsets.MonthEnd(0)
+    ).normalize()
+
+
+# ============================================================
+# SAMPLING WEEK
+# ============================================================
+
+def sampling_week(
+    call_date,
+    anchor,
+):
+    """
+    Sampling weeks NEVER cross a calendar month.
+
+    Example:
+
+        Anchor = 2026-08-03
+
+        Week 1 = Aug 03 - Aug 09
+        Week 2 = Aug 10 - Aug 16
+        Week 3 = Aug 17 - Aug 23
+        Week 4 = Aug 24 - Aug 30
+        Week 5 = Aug 31
+
+    September starts a new workbook and therefore
+    a new Week 1.
+
+    This function deliberately raises an error if
+    call_date and anchor belong to different months.
+    """
+
+    call_date = pd.Timestamp(
+        call_date
+    ).normalize()
+
+    anchor = pd.Timestamp(
+        anchor
+    ).normalize()
+
+    if (
+        call_date.year != anchor.year
+        or call_date.month != anchor.month
+    ):
+        raise ValueError(
+            "Sampling week cannot cross "
+            "a calendar-month boundary. "
+            f"Call date: {call_date.date()}, "
+            f"anchor: {anchor.date()}"
+        )
+
+    if call_date < anchor:
+        raise ValueError(
+            "Call date cannot be before "
+            "the monthly run anchor."
+        )
+
+    days_from_anchor = (
+        call_date - anchor
+    ).days
+
+    return (
+        days_from_anchor // 7
+    ) + 1
+
+
+# ============================================================
+# PACING - NORMAL DAYS
+# ============================================================
+
+def normal_pacing_days_elapsed(
+    current_date,
+):
+    """
+    Count Monday-Saturday days from the first
+    calendar day of the month through current_date.
+    """
+
+    current_date = pd.Timestamp(
+        current_date
+    ).normalize()
+
+    first = month_start(
+        current_date
+    )
+
+    dates = pd.date_range(
+        first,
+        current_date,
+        freq="D",
+    )
+
+    return sum(
+        is_call_day(d)
+        for d in dates
+    )
+
+
+# ============================================================
+# PACING - VACATIONS
+# ============================================================
+
+def future_vacation_days(
+    current_date,
+    config,
+):
+    """
+    Return future Monday-Saturday vacation dates
+    in the same month.
+
+    Vacation is NOT a blocked selection day.
+
+    These dates only affect pacing.
+    """
+
+    current_date = pd.Timestamp(
+        current_date
+    ).normalize()
+
+    return sorted(
+        [
+            d
+            for d in config.vacation_dates
+            if (
+                d > current_date
+                and d.year
+                == current_date.year
+                and d.month
+                == current_date.month
+                and is_call_day(d)
+            )
+        ]
+    )
+
+
+def pacing_days_elapsed(
+    current_date,
+    config,
+):
+    """
+    Calculate how much pacing progress has occurred.
+
+    With no vacation:
+        normal Monday-Saturday progress.
+
+    With vacation:
+        vacation dates create additional pacing pressure,
+        because the auditor has less practical time later.
+
+    IMPORTANT:
+        Vacation does not prevent today's selection.
+    """
+
+    normal_days = (
+        normal_pacing_days_elapsed(
+            current_date
+        )
+    )
+
+    if not config.vacation_dates:
+
+        return min(
+            normal_days,
+            config.working_days,
+        )
+
+    future_vacations = (
+        future_vacation_days(
+            current_date,
+            config,
+        )
+    )
+
+    vacation_pressure = len(
+        future_vacations
+    )
+
+    return min(
+        normal_days
+        + vacation_pressure,
+        config.working_days,
+    )
+
+
+def remaining_pacing_days(
+    current_date,
+    config,
+):
+
+    elapsed = pacing_days_elapsed(
+        current_date,
+        config,
+    )
+
+    return max(
+        0,
+        config.working_days
+        - elapsed,
+    )
+
+
+# ============================================================
+# PACING TARGET
+# ============================================================
+
+def pacing_target(
+    quota,
+    working_days,
+    elapsed_days,
+):
+    """
+    Determine how many calls should have been
+    completed by this point.
+
+    Example:
+
+        quota = 3
+        working_days = 21
+
+    The target gradually moves toward 3 instead
+    of asking for all 3 near the end of the month.
+    """
+
+    if quota <= 0:
+        return 0
+
+    if working_days <= 0:
+        return 0
+
+    elapsed_days = min(
+        elapsed_days,
+        working_days,
+    )
+
+    return min(
+        quota,
+        math.ceil(
+            quota
+            * elapsed_days
+            / working_days
+        ),
+    )
+
+
+# ============================================================
+# PAIR HISTORY
+# ============================================================
+
+def pair_history(
+    selections,
+    pair,
+):
+
+    if selections.empty:
+        return selections
+
+    return selections[
+        (
+            selections["auditor_id"]
+            == pair.auditor_id
+        )
+        &
+        (
+            selections["agent_id"]
+            == pair.agent_id
+        )
+        &
+        (
+            selections["category"]
+            == pair.category
+        )
+    ].copy()
+
+
+def agent_history(
+    selections,
+    pair,
+):
+
+    if selections.empty:
+        return selections
+
+    return selections[
+        (
+            selections["auditor_id"]
+            == pair.auditor_id
+        )
+        &
+        (
+            selections["agent_id"]
+            == pair.agent_id
+        )
+    ].copy()
+
+
+# ============================================================
+# QUOTA
+# ============================================================
+
+def selected_count(
+    selections,
+    pair,
+):
+
+    return len(
+        pair_history(
+            selections,
+            pair,
+        )
+    )
+
+
+def remaining_quota(
+    selections,
+    pair,
+    config,
+):
+
+    return max(
+        0,
+        config.required_calls
+        - selected_count(
+            selections,
+            pair,
+        ),
+    )
+
+
+# ============================================================
+# PACING STATUS
+# ============================================================
+
+def selections_due_today(
+    selections,
+    pair,
+    config,
+    current_date,
+):
+
+    target = pacing_target(
+        config.required_calls,
+        config.working_days,
+        pacing_days_elapsed(
+            current_date,
+            config,
+        ),
+    )
+
+    already_selected = selected_count(
+        selections,
+        pair,
+    )
+
+    return max(
+        0,
+        target
+        - already_selected,
+    )
+
+
+def quota_at_risk(
+    selections,
+    pair,
+    config,
+    current_date,
+):
+    """
+    Quota is at risk when the remaining number
+    of calls exceeds the remaining pacing days.
+
+    Example:
+
+        3 calls remain
+        2 pacing days remain
+
+    Therefore at least one day will need
+    additional pressure / relaxation.
+    """
+
+    remaining = remaining_quota(
+        selections,
+        pair,
+        config,
+    )
+
+    days_left = remaining_pacing_days(
+        current_date,
+        config,
+    )
+
+    return (
+        remaining > days_left
+    )
+
+
+# ============================================================
+# LENGTH VALIDATION
+# ============================================================
+
+def length_is_valid(
+    length,
+    minimum,
+    maximum,
+):
+
+    if (
+        minimum is not None
+        and length < minimum
+    ):
+        return False
+
+    if (
+        maximum is not None
+        and length > maximum
+    ):
+        return False
+
+    return True
+
+
+# ============================================================
+# STRICT LENGTH SELECTION
+# ============================================================
+
+def select_shortest_qualifying_call(
+    candidates,
+    minimum,
+    maximum,
+):
+    """
+    Select the shortest call that satisfies
+    the configured min/max length.
+
+    This function is intentionally independent
+    and can be unit tested separately.
+    """
+
+    if candidates.empty:
+        return None
+
+    eligible = candidates[
+        candidates["call_length"].apply(
+            lambda x:
+            length_is_valid(
+                x,
+                minimum,
+                maximum,
+            )
+        )
+    ].copy()
+
+    if eligible.empty:
+        return None
+
+    return (
+        eligible
+        .sort_values(
+            [
+                "call_length",
+                "call_id",
+            ]
+        )
+        .iloc[0]
+    )
+
+
+# ============================================================
+# RELAXED LENGTH SELECTION
+# ============================================================
+
+def select_relaxed_length_call(
+    candidates,
+    minimum,
+    maximum,
+):
+    """
+    LEVEL 4.
+
+    If no call fits the configured range,
+    find the call requiring the smallest
+    deviation outside that range.
+
+    Ties are resolved by choosing the
+    shortest call.
+    """
+
+    if candidates.empty:
+        return None
+
+    choices = []
+
+    for _, row in candidates.iterrows():
+
+        length = float(
+            row["call_length"]
+        )
+
+        if length_is_valid(
+            length,
+            minimum,
+            maximum,
+        ):
+
+            distance = 0.0
+
+        elif (
+            minimum is not None
+            and length < minimum
+        ):
+
+            distance = (
+                minimum
+                - length
+            )
+
+        elif (
+            maximum is not None
+            and length > maximum
+        ):
+
+            distance = (
+                length
+                - maximum
+            )
+
+        else:
+
+            distance = 0.0
+
+        choices.append(
+            (
+                distance,
+                length,
+                str(row["call_id"]),
+                row,
+            )
+        )
+
+    choices.sort(
+        key=lambda x: (
+            x[0],
+            x[1],
+            x[2],
+        )
+    )
+
+    return choices[0][3]
+
+
+# ============================================================
+# WEEKLY CONSTRAINT
+# ============================================================
+
+def apply_weekly_rule(
+    candidates,
+    history,
+    pair,
+    anchor,
+):
+    """
+    Enforce:
+
+        Same auditor
+        Same agent
+        Same category
+
+    cannot have two selections
+    in the same sampling week.
+
+    The week is calculated from the
+    monthly anchor and NEVER crosses
+    the calendar month.
+    """
+
+    pair_hist = pair_history(
+        history,
+        pair,
+    )
+
+    if pair_hist.empty:
+        return candidates
+
+    used_weeks = set(
+        pair_hist[
+            "sampling_week"
+        ].astype(int)
+    )
+
+    eligible = []
+
+    for _, row in candidates.iterrows():
+
+        week = sampling_week(
+            row["call_date"],
+            anchor,
+        )
+
+        if week not in used_weeks:
+            eligible.append(row)
+
+    if not eligible:
+        return candidates.iloc[0:0].copy()
+
+    return pd.DataFrame(
+        eligible
+    )
+
+
+# ============================================================
+# SAME-DAY ACROSS CATEGORY
+# ============================================================
+
+def apply_same_day_across_category(
+    candidates,
+    history,
+    pair,
+):
+    """
+    Enforce:
+
+        Same auditor + same agent
+
+    cannot have bind and policy change
+    selected on the same calendar day.
+
+    This rule applies across categories.
+    """
+
+    agent_hist = agent_history(
+        history,
+        pair,
+    )
+
+    if agent_hist.empty:
+        return candidates
+
+    used_days = set(
+        pd.to_datetime(
+            agent_hist[
+                "call_date"
+            ]
+        ).dt.normalize()
+    )
+
+    return candidates[
+        ~candidates[
+            "call_date"
+        ].dt.normalize()
+        .isin(used_days)
+    ].copy()
+
+
+# ============================================================
+# SAME-DAY WITHIN CATEGORY
+# ============================================================
+
+def apply_same_day_within_category(
+    candidates,
+    history,
+    pair,
+):
+    """
+    Enforce:
+
+        Same auditor
+        Same agent
+        Same category
+
+    cannot have multiple selections
+    on the same calendar day.
+    """
+
+    pair_hist = pair_history(
+        history,
+        pair,
+    )
+
+    if pair_hist.empty:
+        return candidates
+
+    used_days = set(
+        pd.to_datetime(
+            pair_hist[
+                "call_date"
+            ]
+        ).dt.normalize()
+    )
+
+    return candidates[
+        ~candidates[
+            "call_date"
+        ].dt.normalize()
+        .isin(used_days)
+    ].copy()
+
+
+# ============================================================
+# RELAXATION LADDER
+# ============================================================
+
+def apply_relaxation_ladder(
+    candidates,
+    pair,
+    history,
+    config,
+    anchor,
+    allow_relaxation,
+):
+    """
+    Constraint relaxation ladder.
+
+    LEVEL 0
+    -------
+    Apply all configured constraints.
+
+    LEVEL 1
+    -------
+    Relax weekly_rule_within_category.
+
+    Same-day rules remain.
+
+    LEVEL 2
+    -------
+    Relax same_day_rule_across_category.
+
+    Same-category-day rule remains.
+
+    LEVEL 3
+    -------
+    Relax same_day_within_category.
+
+    LEVEL 4
+    -------
+    Relax call length.
+
+    IMPORTANT
+    ---------
+
+    Relaxation is only allowed when
+    allow_relaxation=True.
+
+    Pacing decides whether relaxation
+    is justified.
+
+    Each level is explicit and separately
+    identifiable.
+    """
+
+    # ========================================================
+    # LEVEL 0 - STRICT
+    # ========================================================
+
+    level0 = candidates.copy()
+
+    if config.weekly_rule_within_category:
+
+        level0 = apply_weekly_rule(
+            level0,
+            history,
+            pair,
+            anchor,
+        )
+
+    if config.same_day_rule_across_category:
+
+        level0 = (
+            apply_same_day_across_category(
+                level0,
+                history,
+                pair,
+            )
+        )
+
+    if config.same_day_within_category:
+
+        level0 = (
+            apply_same_day_within_category(
+                level0,
+                history,
+                pair,
+            )
+        )
+
+    selected = (
+        select_shortest_qualifying_call(
+            level0,
+            config.min_call_length,
+            config.max_call_length,
+        )
+    )
+
+    if selected is not None:
+
+        return SelectionResult(
+            call=selected,
+            relaxation_level=(
+                "LEVEL_0_STRICT"
+            ),
+            length_relaxed=False,
+            reason=(
+                "All configured constraints "
+                "were satisfied."
+            ),
+        )
+
+    # ========================================================
+    # DO NOT RELAX YET
+    # ========================================================
+
+    if not allow_relaxation:
+
+        return SelectionResult(
+            call=None,
+            relaxation_level=None,
+            length_relaxed=False,
+            reason=(
+                "Strict selection unavailable, "
+                "but quota is not yet at risk."
+            ),
+        )
+
+    # ========================================================
+    # LEVEL 1
+    #
+    # Drop weekly restriction.
+    #
+    # Keep both same-day restrictions.
+    # ========================================================
+
+    level1 = candidates.copy()
+
+    if config.same_day_rule_across_category:
+
+        level1 = (
+            apply_same_day_across_category(
+                level1,
+                history,
+                pair,
+            )
+        )
+
+    if config.same_day_within_category:
+
+        level1 = (
+            apply_same_day_within_category(
+                level1,
+                history,
+                pair,
+            )
+        )
+
+    selected = (
+        select_shortest_qualifying_call(
+            level1,
+            config.min_call_length,
+            config.max_call_length,
+        )
+    )
+
+    if selected is not None:
+
+        return SelectionResult(
+            call=selected,
+            relaxation_level=(
+                "LEVEL_1_WEEKLY_RELAXED"
+            ),
+            length_relaxed=False,
+            reason=(
+                "Weekly restriction relaxed "
+                "because quota was at risk."
+            ),
+        )
+
+    # ========================================================
+    # LEVEL 2
+    #
+    # Drop same-day-across-category.
+    #
+    # Keep same-day-within-category.
+    # ========================================================
+
+    level2 = candidates.copy()
+
+    if config.same_day_within_category:
+
+        level2 = (
+            apply_same_day_within_category(
+                level2,
+                history,
+                pair,
+            )
+        )
+
+    selected = (
+        select_shortest_qualifying_call(
+            level2,
+            config.min_call_length,
+            config.max_call_length,
+        )
+    )
+
+    if selected is not None:
+
+        return SelectionResult(
+            call=selected,
+            relaxation_level=(
+                "LEVEL_2_SAME_DAY_ACROSS_CATEGORY_RELAXED"
+            ),
+            length_relaxed=False,
+            reason=(
+                "Same-day-across-category "
+                "restriction relaxed "
+                "because quota was at risk."
+            ),
+        )
+
+    # ========================================================
+    # LEVEL 3
+    #
+    # Drop same-day-within-category.
+    # ========================================================
+
+    level3 = candidates.copy()
+
+    selected = (
+        select_shortest_qualifying_call(
+            level3,
+            config.min_call_length,
+            config.max_call_length,
+        )
+    )
+
+    if selected is not None:
+
+        return SelectionResult(
+            call=selected,
+            relaxation_level=(
+                "LEVEL_3_SAME_DAY_WITHIN_CATEGORY_RELAXED"
+            ),
+            length_relaxed=False,
+            reason=(
+                "Same-day-within-category "
+                "restriction relaxed "
+                "because quota was at risk."
+            ),
+        )
+
+    # ========================================================
+    # LEVEL 4
+    #
+    # Relax length.
+    #
+    # All calendar constraints have already
+    # been relaxed at this point.
+    # ========================================================
+
+    selected = (
+        select_relaxed_length_call(
+            level3,
+            config.min_call_length,
+            config.max_call_length,
+        )
+    )
+
+    if selected is not None:
+
+        return SelectionResult(
+            call=selected,
+            relaxation_level=(
+                "LEVEL_4_LENGTH_RELAXED"
+            ),
+            length_relaxed=True,
+            reason=(
+                "Call-length threshold relaxed "
+                "because quota was at risk."
+            ),
+        )
+
+    # ========================================================
+    # NOTHING FOUND
+    # ========================================================
+
+    return SelectionResult(
+        call=None,
+        relaxation_level=None,
+        length_relaxed=False,
+        reason=(
+            "No candidate found after "
+            "full constraint relaxation."
+        ),
+    )
+
+
+# ============================================================
+# UPDATE SELECTION HISTORY
+# ============================================================
+
+def add_selection(
+    selections,
+    pair,
+    call,
+    result,
+    anchor,
+):
+    """
+    Immediately add a selected call to the history.
+
+    This is critical because if multiple calls are
+    selected during today's run, the next selection
+    must see the previous selection.
+
+    Therefore:
+
+        selected call
+            ↓
+        update history
+            ↓
+        next candidate check
+
+    This prevents duplicates and correctly enforces
+    same-day/week rules during the same run.
+    """
+
+    call_date = pd.Timestamp(
+        call["call_date"]
+    ).normalize()
+
+    row = pd.DataFrame(
+        [{
+            "run_date": pd.Timestamp(
+                call["run_date"]
+            ).normalize(),
+
+            "auditor_id": (
+                pair.auditor_id
+            ),
+
+            "agent_id": (
+                pair.agent_id
+            ),
+
+            "category": (
+                pair.category
+            ),
+
+            "call_id": str(
+                call["call_id"]
+            ),
+
+            "call_date": call_date,
+
+            "call_length": float(
+                call["call_length"]
+            ),
+
+            "sampling_week": (
+                sampling_week(
+                    call_date,
+                    anchor,
+                )
+            ),
+
+            "relaxation_level": (
+                result.relaxation_level
+            ),
+
+            "length_relaxed": (
+                result.length_relaxed
+            ),
+
+            "selection_reason": (
+                result.reason
+            ),
+        }]
+    )
+
+    return pd.concat(
+        [
+            selections,
+            row,
+        ],
+        ignore_index=True,
+    )
+
+
+# ============================================================
+# WRITE SELECTIONS
+# ============================================================
+
+def write_selections(
+    path,
+    selections,
+):
+
+    selections.to_excel(
+        path,
+        sheet_name="Selections",
+        index=False,
+    )
+
+
+# ============================================================
+# WRITE DAILY OUTPUT
+# ============================================================
+
+def append_daily_output(
+    path,
+    daily_output,
+    run_date,
+):
+    """
+    Keep all daily outputs in one sheet.
+
+    If today's run is repeated, today's previous
+    rows are removed first.
+    """
+
+    existing = pd.read_excel(
+        path,
+        sheet_name="Daily_Output",
+    )
+
+    if not existing.empty:
+
+        existing["run_date"] = (
+            pd.to_datetime(
+                existing["run_date"]
+            ).dt.normalize()
+        )
+
+        existing = existing[
+            existing["run_date"]
+            != run_date
+        ]
+
+    combined = pd.concat(
+        [
+            existing,
+            daily_output,
+        ],
+        ignore_index=True,
+    )
+
+    combined.to_excel(
+        path,
+        sheet_name="Daily_Output",
+        index=False,
+    )
+
+
+# ============================================================
+# STATISTICS
+# ============================================================
+
+def build_statistics(
+    mapping,
+    configs,
+    selections,
+    month,
+    run_date,
+):
+    """
+    Build current monthly auditor statistics.
+
+    This sheet is rebuilt every run.
+    """
+
+    rows = []
+
+    auditors = sorted(
+        mapping[
+            "auditor_id"
+        ]
+        .astype(str)
+        .unique()
+    )
+
+    for auditor_id in auditors:
+
+        agents = sorted(
+            mapping[
+                mapping["auditor_id"]
+                == auditor_id
+            ][
+                "agent_id"
+            ]
+            .astype(str)
+            .unique()
+        )
+
+        total_required = 0
+        total_selected = 0
+
+        bind_required = 0
+        bind_selected = 0
+
+        policy_required = 0
+        policy_selected = 0
+
+        for agent_id in agents:
+
+            for category in sorted(
+                CATEGORIES
+            ):
+
+                key = (
+                    auditor_id,
+                    month,
+                    category,
+                )
+
+                config = configs.get(
+                    key
+                )
+
+                if config is None:
+                    continue
+
+                required = (
+                    config.required_calls
+                )
+
+                total_required += required
+
+                if category == "bind":
+                    bind_required += required
+                else:
+                    policy_required += required
+
+                if selections.empty:
+
+                    count = 0
+
+                else:
+
+                    count = len(
+                        selections[
+                            (
+                                selections[
+                                    "auditor_id"
+                                ]
+                                == auditor_id
+                            )
+                            &
+                            (
+                                selections[
+                                    "agent_id"
+                                ]
+                                == agent_id
+                            )
+                            &
+                            (
+                                selections[
+                                    "category"
+                                ]
+                                == category
+                            )
+                        ]
+                    )
+
+                count = min(
+                    count,
+                    required,
+                )
+
+                total_selected += count
+
+                if category == "bind":
+                    bind_selected += count
+                else:
+                    policy_selected += count
+
+        total_remaining = max(
+            0,
+            total_required
+            - total_selected,
+        )
+
+        completion = (
+            0
+            if total_required == 0
+            else (
+                total_selected
+                / total_required
+                * 100
+            )
+        )
+
+        auditor_configs = [
+            config
+            for key, config in configs.items()
+            if (
+                key[0] == auditor_id
+                and key[1] == month
+            )
+        ]
+
+        working_days = (
+            auditor_configs[0]
+            .working_days
+            if auditor_configs
+            else None
+        )
+
+        vacation_dates = set()
+
+        for config in auditor_configs:
+            vacation_dates.update(
+                config.vacation_dates
+            )
+
+        rows.append(
+            {
+                "run_date": run_date.date(),
+
+                "month": month,
+
+                "auditor_id": auditor_id,
+
+                "agents_assigned": len(
+                    agents
+                ),
+
+                "working_days": (
+                    working_days
+                ),
+
+                "vacation_pacing_days": len(
+                    vacation_dates
+                ),
+
+                "bind_required": (
+                    bind_required
+                ),
+
+                "bind_selected": (
+                    bind_selected
+                ),
+
+                "bind_remaining": (
+                    bind_required
+                    - bind_selected
+                ),
+
+                "policy_change_required": (
+                    policy_required
+                ),
+
+                "policy_change_selected": (
+                    policy_selected
+                ),
+
+                "policy_change_remaining": (
+                    policy_required
+                    - policy_selected
+                ),
+
+                "total_required": (
+                    total_required
+                ),
+
+                "total_selected": (
+                    total_selected
+                ),
+
+                "total_remaining": (
+                    total_remaining
+                ),
+
+                "completion_percent": round(
+                    completion,
+                    2,
+                ),
+
+                "complete": (
+                    total_remaining == 0
+                ),
+            }
+        )
+
+    return pd.DataFrame(
+        rows
+    )
+
+
+# ============================================================
+# WRITE STATS
+# ============================================================
+
+def write_statistics(
+    path,
+    stats,
+):
+
+    stats.to_excel(
+        path,
+        sheet_name="Audit_Stats",
+        index=False,
+    )
+
+
+# ============================================================
+# FORMAT EXCEL
+# ============================================================
+
+def format_workbook(path):
+
+    wb = load_workbook(
+        path
+    )
+
+    for ws in wb.worksheets:
+
+        ws.freeze_panes = "A2"
+
+        if ws.max_row >= 1:
+
+            ws.auto_filter.ref = (
+                ws.dimensions
+            )
+
+        for column_cells in ws.columns:
+
+            max_length = 0
+
+            column_letter = (
+                column_cells[0]
+                .column_letter
+            )
+
+            for cell in column_cells:
+
+                value = cell.value
+
+                if value is not None:
+
+                    max_length = max(
+                        max_length,
+                        len(str(value)),
+                    )
+
+            ws.column_dimensions[
+                column_letter
+            ].width = min(
+                max_length + 2,
+                45,
+            )
+
+    wb.save(path)
+
+
+# ============================================================
+# DAILY JOB
+# ============================================================
+
+def run_daily_job():
+
+    # ========================================================
+    # AUTOMATIC RUN DATE
+    # ========================================================
+
+    run_date = (
+        pd.Timestamp.today()
+        .normalize()
+    )
+
+    month = month_from_date(
+        run_date
+    )
+
+    print()
+    print("=" * 80)
+    print("AUDITOR DAILY CALL SELECTION")
+    print("=" * 80)
+
+    print(
+        f"Run date: {run_date.date()}"
+    )
+
+    print(
+        f"Month: {month}"
+    )
+
+    # ========================================================
+    # SUNDAY
+    # ========================================================
+
+    if not is_call_day(
+        run_date
+    ):
+
+        print(
+            "Today is Sunday."
+        )
+
+        print(
+            "No call selection will be performed."
+        )
+
+        return
+
+    # ========================================================
+    # LOAD INPUT FILES
+    # ========================================================
+
+    print()
+    print("Loading input files...")
+
+    mapping = load_mapping()
+
+    configs = load_configs()
+
+    calls = load_calls()
+
+    print(
+        f"Assignments loaded: {len(mapping)}"
+    )
+
+    print(
+        f"Configurations loaded: {len(configs)}"
+    )
+
+    print(
+        f"Calls loaded: {len(calls)}"
+    )
+
+    # ========================================================
+    # TODAY'S CALLS
+    # ========================================================
+
+    today_calls = calls[
+        calls["run_date"]
+        == run_date
+    ].copy()
+
+    print(
+        f"Today's calls: "
+        f"{len(today_calls)}"
+    )
+
+    # ========================================================
+    # MONTHLY WORKBOOK
+    # ========================================================
+
+    workbook = workbook_path(
+        month
+    )
+
+    create_workbook_if_needed(
+        workbook,
+        run_date,
+    )
+
+    # ========================================================
+    # LOAD MONTH-TO-DATE HISTORY
+    # ========================================================
+
+    selections = load_selections(
+        workbook
+    )
+
+    # ========================================================
+    # RERUN
+    #
+    # Remove today's previous selections only.
+    # ========================================================
+
+    before_count = len(
+        selections
+    )
+
+    selections = remove_run_date(
+        selections,
+        run_date,
+    )
+
+    removed_count = (
+        before_count
+        - len(selections)
+    )
+
+    if removed_count > 0:
+
+        print()
+        print(
+            f"Rerun detected: removed "
+            f"{removed_count} existing "
+            f"selections from today's run."
+        )
+
+    # ========================================================
+    # MONTHLY ANCHOR
+    # ========================================================
+
+    anchor = load_run_anchor(
+        workbook
+    )
+
+    # Safety check.
+    if (
+        anchor.year != run_date.year
+        or anchor.month != run_date.month
+    ):
+        raise ValueError(
+            "The Run_Anchor belongs to a "
+            "different month than today's "
+            "workbook."
+        )
+
+    print(
+        f"Sampling anchor: "
+        f"{anchor.date()}"
+    )
+
+    # ========================================================
+    # DAILY OUTPUT
+    # ========================================================
+
+    daily_rows = []
+
+    # ========================================================
+    # PROCESS EACH ASSIGNMENT
+    # ========================================================
+
+    for assignment in mapping.itertuples(
+        index=False
+    ):
+
+        auditor_id = str(
+            assignment.auditor_id
+        )
+
+        agent_id = str(
+            assignment.agent_id
+        )
+
+        # ----------------------------------------------------
+        # Each agent gets processed independently.
+        # ----------------------------------------------------
+
+        for category in sorted(
+            CATEGORIES
+        ):
+
+            key = (
+                auditor_id,
+                month,
+                category,
+            )
+
+            if key not in configs:
+
+                raise ValueError(
+                    "Missing configuration for "
+                    f"auditor={auditor_id}, "
+                    f"month={month}, "
+                    f"category={category}"
+                )
+
+            config = configs[
+                key
+            ]
+
+            pair = PairKey(
+                auditor_id=auditor_id,
+                agent_id=agent_id,
+                category=category,
+            )
+
+            # =================================================
+            # MONTHLY QUOTA
+            # =================================================
+
+            remaining = remaining_quota(
+                selections,
+                pair,
+                config,
+            )
+
+            if remaining <= 0:
+                continue
+
+            # =================================================
+            # PACING
+            # =================================================
+
+            due_today = (
+                selections_due_today(
+                    selections,
+                    pair,
+                    config,
+                    run_date,
+                )
+            )
+
+            at_risk = quota_at_risk(
+                selections,
+                pair,
+                config,
+                run_date,
+            )
+
+            # =================================================
+            # NOT DUE YET
+            # =================================================
+
+            if (
+                due_today <= 0
+                and not at_risk
+            ):
+                continue
+
+            # =================================================
+            # NUMBER OF CALLS TO TRY TODAY
+            # =================================================
+
+            number_to_select = max(
+                1,
+                due_today,
+            )
+
+            number_to_select = min(
+                number_to_select,
+                remaining,
+            )
+
+            selected_today = 0
+
+            # =================================================
+            # SELECT TODAY'S CALLS
+            # =================================================
+
+            while (
+                selected_today
+                < number_to_select
+            ):
+
+                # ------------------------------------------------
+                # Candidate calls for this agent/category today.
+                # ------------------------------------------------
+
+                candidates = today_calls[
+                    (
+                        today_calls[
+                            "agent_id"
+                        ]
+                        == agent_id
+                    )
+                    &
+                    (
+                        today_calls[
+                            "category"
+                        ]
+                        == category
+                    )
+                ].copy()
+
+                # ------------------------------------------------
+                # NEVER SELECT A CALL ID TWICE.
+                #
+                # The monthly Excel history is the source of truth.
+                # ------------------------------------------------
+
+                if not selections.empty:
+
+                    used_call_ids = set(
+                        selections[
+                            "call_id"
+                        ]
+                        .astype(str)
+                    )
+
+                    candidates = candidates[
+                        ~candidates[
+                            "call_id"
+                        ]
+                        .astype(str)
+                        .isin(
+                            used_call_ids
+                        )
+                    ]
+
+                if candidates.empty:
+
+                    break
+
+                # =================================================
+                # RECHECK PACING RISK
+                # =================================================
+
+                risk_now = quota_at_risk(
+                    selections,
+                    pair,
+                    config,
+                    run_date,
+                )
+
+                # =================================================
+                # RELAXATION LADDER
+                # =================================================
+
+                result = (
+                    apply_relaxation_ladder(
+                        candidates=candidates,
+                        pair=pair,
+                        history=selections,
+                        config=config,
+                        anchor=anchor,
+                        allow_relaxation=risk_now,
+                    )
+                )
+
+                # =================================================
+                # NOTHING FOUND
+                # =================================================
+
+                if result.call is None:
+
+                    break
+
+                # =================================================
+                # IMMEDIATELY UPDATE HISTORY
+                # =================================================
+
+                selections = add_selection(
+                    selections=selections,
+                    pair=pair,
+                    call=result.call,
+                    result=result,
+                    anchor=anchor,
+                )
+
+                selected_today += 1
+
+                call = result.call
+
+                # =================================================
+                # DAILY OUTPUT ROW
+                # =================================================
+
+                daily_rows.append(
+                    {
+                        "run_date": (
+                            run_date
+                        ),
+
+                        "auditor_id": (
+                            auditor_id
+                        ),
+
+                        "agent_id": (
+                            agent_id
+                        ),
+
+                        "category": (
+                            category
+                        ),
+
+                        "call_id": str(
+                            call[
+                                "call_id"
+                            ]
+                        ),
+
+                        "call_date": (
+                            pd.Timestamp(
+                                call[
+                                    "call_date"
+                                ]
+                            ).date()
+                        ),
+
+                        "call_length": float(
+                            call[
+                                "call_length"
+                            ]
+                        ),
+
+                        "sampling_week": (
+                            sampling_week(
+                                call[
+                                    "call_date"
+                                ],
+                                anchor,
+                            )
+                        ),
+
+                        "relaxation_level": (
+                            result
+                            .relaxation_level
+                        ),
+
+                        "length_relaxed": (
+                            result
+                            .length_relaxed
+                        ),
+
+                        "required_calls": (
+                            config
+                            .required_calls
+                        ),
+
+                        "working_days": (
+                            config
+                            .working_days
+                        ),
+
+                        "min_call_length": (
+                            config
+                            .min_call_length
+                        ),
+
+                        "max_call_length": (
+                            config
+                            .max_call_length
+                        ),
+
+                        "weekly_rule_within_category": (
+                            config
+                            .weekly_rule_within_category
+                        ),
+
+                        "same_day_rule_across_category": (
+                            config
+                            .same_day_rule_across_category
+                        ),
+
+                        "same_day_within_category": (
+                            config
+                            .same_day_within_category
+                        ),
+
+                        "selection_reason": (
+                            result.reason
+                        ),
+                    }
+                )
+
+    # ========================================================
+    # SAVE MONTH-TO-DATE SELECTIONS
+    # ========================================================
+
+    write_selections(
+        workbook,
+        selections,
+    )
+
+    # ========================================================
+    # DAILY OUTPUT
+    # ========================================================
+
+    daily_output = pd.DataFrame(
+        daily_rows,
+        columns=DAILY_OUTPUT_COLUMNS,
+    )
+
+    append_daily_output(
+        workbook,
+        daily_output,
+        run_date,
+    )
+
+    # ========================================================
+    # STATS
+    # ========================================================
+
+    stats = build_statistics(
+        mapping=mapping,
+        configs=configs,
+        selections=selections,
+        month=month,
+        run_date=run_date,
+    )
+
+    write_statistics(
+        workbook,
+        stats,
+    )
+
+    # ========================================================
+    # FORMAT EXCEL
+    # ========================================================
+
+    format_workbook(
+        workbook
+    )
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    print()
+    print("=" * 80)
+    print("RUN COMPLETE")
+    print("=" * 80)
+
+    print(
+        f"Selected today: "
+        f"{len(daily_output)}"
+    )
+
+    print(
+        f"Month-to-date selections: "
+        f"{len(selections)}"
+    )
+
+    if not stats.empty:
+
+        completed = int(
+            stats[
+                "complete"
+            ].sum()
+        )
+
+        total_auditors = len(
+            stats
+        )
+
+        print(
+            f"Auditors completed: "
+            f"{completed}/"
+            f"{total_auditors}"
+        )
+
+    print(
+        f"Workbook: {workbook}"
+    )
+
+    print("=" * 80)
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+if __name__ == "__main__":
+
+    run_daily_job()
