@@ -4,35 +4,30 @@ from fastapi import FastAPI, Depends, HTTPException, Header, status
 
 app = FastAPI()
 
-# Replace with your HTTP SPN, e.g., "HTTP/testapp.corp.domain.com"
-SERVICE_NAME = "HTTP/0.0.0.0" 
+# Use your User Principal Name here
+USER_PRINCIPAL = "abc.xyz@ddd.ZZZ.COM"
 
 def get_kerberos_user(authorization: str = Header(None)) -> str:
-    """FastAPI dependency to extract and validate Kerberos tokens."""
     if not authorization or not authorization.startswith("Negotiate "):
-        # Step 1: Tell the browser to attempt Kerberos authentication
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Kerberos authentication required",
             headers={"WWW-Authenticate": "Negotiate"}
         )
 
-    # Step 2: Extract base64 token
     in_token_b64 = authorization.split(" ")[1]
     in_token = base64.b64decode(in_token_b64)
 
-    # Step 3: Validate token against Kerberos/SPNEGO context
-    server = spnego.server(service=SERVICE_NAME, protocol="negotiate")
-    
+    # Initialize server context bound to your user principal/ccache
+    server = spnego.server(service=USER_PRINCIPAL, protocol="negotiate")
+
     try:
         server.step(in_token)
         if server.complete:
-            # Successfully authenticated! Returns principal (e.g., user@REALM.COM)
-            return server.peer_name 
+            return server.peer_name
         else:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incomplete Kerberos handshake",
                 headers={"WWW-Authenticate": "Negotiate"}
             )
     except Exception as e:
@@ -43,7 +38,4 @@ def get_kerberos_user(authorization: str = Header(None)) -> str:
 
 @app.get("/")
 def read_root(user: str = Depends(get_kerberos_user)):
-    return {
-        "status": "Authenticated",
-        "user": user
-    }
+    return {"status": "Authenticated", "user": user}
