@@ -1,0 +1,60 @@
+import base64
+import logging
+import spnego
+from fastapi import FastAPI, Depends, HTTPException, Header, Response, status
+
+app = FastAPI()
+logger = logging.getLogger("kerberos_auth")
+
+# Must match the actual hostname clients use, and exist in your keytab/AD.
+SERVICE_NAME = "HTTP/testapp.corp.domain.com"
+
+def get_kerberos_user(response: Response, authorization: str = Header(None)) -> str:
+    if not authorization or not authorization.lower().startswith("negotiate"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Kerberos authentication required",
+            headers={"WWW-Authenticate": "Negotiate"},
+        )
+
+    try:
+        in_token_b64 = authorization.split(" ", 1)[1].strip()
+        in_token = base64.b64decode(in_token_b64)
+    except (IndexError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Malformed Authorization header",
+        )
+
+    server = spnego.server(service=SERVICE_NAME, protocol="negotiate")
+
+    try:
+        out_token = server.step(in_token)
+    except Exception:
+        logger.exception("Kerberos/SPNEGO validation failed")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kerberos validation failed",
+        )
+
+    if not server.complete:
+        # Negotiation not finished — send any output token back for another round trip.
+        header_val = "Negotiate"
+        if out_token:
+            header_val += " " + base64.b64encode(out_token).decode()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incomplete Kerberos handshake",
+            headers={"WWW-Authenticate": header_val},
+        )
+
+    # Success — include mutual-auth token if the server produced one.
+    if out_token:
+        response.headers["WWW-Authenticate"] = "Negotiate " + base64.b64encode(out_token).decode()
+
+    return server.peer_name
+
+
+@app.get("/")
+def read_root(user: str = Depends(get_kerberos_user)):
+    return {"status": "Authenticated", "user": user}
