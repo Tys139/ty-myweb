@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audit Forms</title>
+<style>
+:root{--bg:#f6f7f9;--cd:#fff;--tx:#1b2430;--mu:#5b6675;--bd:#d9dee5;--hd:#1f3864;--mid:#2e75b6;--in:#fff4cc;--na:#e7e6e6;--sec:#ddebf7;--ok:#c6efce;--okt:#006100;--bad:#ffc7ce;--badt:#9c0006;--am:#ffeb9c;--amt:#9c5700}
+@media(prefers-color-scheme:dark){:root{--bg:#12161c;--cd:#1a2029;--tx:#e8ecf1;--mu:#98a3b3;--bd:#2c3542;--hd:#0f2342;--mid:#3b82c4;--in:#4a4220;--na:#2a313c;--sec:#223247;--ok:#1f4a2a;--okt:#a5e8b4;--bad:#5a2229;--badt:#ffb3ba;--am:#524618;--amt:#ffe08a}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.4 system-ui,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--tx)}
+header{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--hd);color:#fff}
+header b{font-size:17px;margin-right:auto}nav{display:flex;gap:6px}
+nav button{background:transparent;color:#fff;border:1px solid #ffffff55}nav button.on{background:#fff;color:#1f3864}
+main{padding:16px;max-width:1250px;margin:auto}h2{margin:.2em 0 .5em}.mu{color:var(--mu)}small{font-size:12px}
+button,.btn,select,input,textarea{font:inherit;color:var(--tx)}
+button,.btn{padding:6px 12px;border:1px solid var(--bd);border-radius:6px;background:var(--cd);cursor:pointer}
+button.pri{background:#2e7d32;color:#fff;border-color:#2e7d32;font-weight:600}
+.lnk{border:0;background:none;color:var(--mid);text-decoration:underline;padding:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:14px 0}
+.tile{background:var(--hd);color:#fff;border:0;border-radius:8px;padding:16px;font-size:16px;font-weight:600;text-align:left}
+.tile small{display:block;font-weight:400;opacity:.8;margin-top:4px}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:8px;padding:12px;margin:10px 0}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+label{display:block;font-weight:600}label select,label input{display:block;width:100%;margin-top:4px;font-weight:400}
+select,input,textarea{padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--cd)}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.bar h2{margin:0}.sp{flex:1}.who{font-size:17px}
+.chip{background:var(--am);color:var(--amt);padding:2px 8px;border-radius:10px;font-weight:600}
+#prog{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:8px;color:#2e7d32;font-weight:600}.big{font-size:18px;color:var(--hd)}
+@media(prefers-color-scheme:dark){.big{color:#9db8e6}}
+.sc{overflow-x:auto;margin:10px 0}table{border-collapse:collapse;width:100%;background:var(--cd)}
+th{background:var(--hd);color:#fff;padding:6px 8px;text-align:left;white-space:nowrap}
+td{border:1px solid var(--bd);padding:5px 8px;vertical-align:middle}td.in{background:var(--in)}td.na{background:var(--na)}
+td select,td input{width:100%;min-width:110px}tr.note td{background:var(--sec);font-style:italic}
+tr.sec td{background:var(--sec);font-weight:600}tr.fin td{background:var(--hd);color:#fff;font-weight:700}
+select.ok{background:var(--ok);color:var(--okt);font-weight:700}select.bad{background:var(--bad);color:var(--badt);font-weight:700}select.am{background:var(--am);color:var(--amt);font-weight:700}
+.okt{color:var(--okt);font-weight:700}.badt{color:var(--badt);font-weight:700}.nw{white-space:nowrap}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}textarea{width:100%;height:55vh;font:12px/1.4 ui-monospace,Consolas,monospace}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1b2430;color:#fff;padding:10px 16px;border-radius:8px;display:none;max-width:90vw;z-index:9}
+</style></head><body>
+<header><b>Audit Forms</b><nav><button data-act="nav" data-v="start">Audit</button><button data-act="nav" data-v="subs">Submissions</button><button data-act="nav" data-v="setup">Setup</button></nav></header>
+<main id="app"></main><div id="toast"></div>
+<script>
+/* ---------- Sample setup (editable later in the Setup tab) ---------- */
+const R=(c,d,i,l,w,m,q)=>({c,d,i,l,w,m,q});
+const DEFAULT={
+auditors:["Alex Morgan","Priya Shah","Jordan Lee","Sam Rivera"],
+agents:["Chris Taylor","Dana Kim","Elena Petrova","Marcus Webb","Nina Alvarez","Omar Hassan"],
+lists:{YesNoUncertain:{Yes:1,No:0,Uncertain:.5},PassFail:{Pass:1,Fail:0},YesNo:{Yes:1,No:0},Severity:{Low:1,Medium:.5,High:.25,Critical:0},Rating1to5:{1:0,2:.25,3:.5,4:.75,5:1}},
+forms:{
+"Vendor Risk Review":{desc:"Assess a new vendor before onboarding.",rows:[
+R("Eval 1 – Contract signed?","Legal","Check the signed MSA is stored in the contract repository.","YesNoUncertain",.2,1,1),
+R("Eval 2 – Legal sign-off obtained?","Legal","Needed for vendors handling PII.","YesNo",.1,1,1),
+R("Eval 3 – Security questionnaire","Security","Vendor must score 80% or higher.","PassFail",.2,1,1),
+R("Eval 4 – Data handling risk","Security","Consider PII, payment and health data.","Severity",.15,1,1),
+R("Eval 5 – Encryption in transit and at rest","Security","Confirm in the architecture document.","YesNoUncertain",.15,0,0),
+R("Eval 6 – Financial stability","Financial","Review the last two years of financial statements.","Rating1to5",.2,0,1),
+R("Eval 7 – Reviewer summary","","Free-form summary for the approver.","",0,1,1),
+R("Note – go-live","","Vendors handling PII need legal sign-off before go-live.","",0,0,0)]},
+"Site Safety Inspection":{desc:"Monthly on-site safety walk-through.",rows:[
+R("Eval 1 – Fire exits clear?","Fire safety","Walk every exit route and note any obstructions.","YesNoUncertain",.25,1,1),
+R("Eval 2 – Extinguishers inspected","Fire safety","Check the service tag date is within 12 months.","PassFail",.15,0,1),
+R("Eval 3 – PPE available?","Equipment","Hard hats, gloves, eye protection.","YesNo",.2,1,1),
+R("Eval 4 – Highest hazard found","Equipment","Rate the single worst hazard observed.","Severity",.25,1,1),
+R("Eval 5 – Training records current?","Training","Spot-check three staff files.","YesNoUncertain",.15,1,0),
+R("Eval 6 – Corrective actions","","Describe actions needed and who owns them.","",0,1,0),
+R("Note – emergency contact","","Site safety officer details are on the notice board.","",0,0,0)]},
+"Code Review Checklist":{desc:"Pre-merge checklist for pull requests.",rows:[
+R("Eval 1 – Tests passing","Quality","CI must be green on the latest commit.","PassFail",.3,0,1),
+R("Eval 2 – Documentation updated?","Quality","README / API docs reflect the change.","YesNoUncertain",.1,1,1),
+R("Eval 3 – Backwards compatible?","Risk","No breaking changes without a migration note.","YesNo",.25,1,1),
+R("Eval 4 – Complexity","Risk","1 = very complex, 5 = trivial.","Rating1to5",.15,0,0),
+R("Eval 5 – Security review done?","Risk","Required for anything touching auth or data.","YesNoUncertain",.2,1,0),
+R("Eval 6 – Reviewer comments","","Anything else the author should know.","",0,1,0)]}}};
+
+/* ---------- State & storage (saved in this browser) ---------- */
+const $=s=>document.querySelector(s),KEY="auditforms.v1";
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct=x=>(x*100).toFixed(1)+"%",fmt=t=>new Date(t).toLocaleString([],{dateStyle:"medium",timeStyle:"short"});
+let db={cfg:JSON.parse(JSON.stringify(DEFAULT)),subs:[]};
+try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&j.cfg)db=j}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){toast("Could not save to browser storage")}};
+const S={v:"start",auditor:"",agent:"",form:"",ans:{},edit:null,q:"",fa:"",open:""};
+let tt;function toast(m){const t=$("#toast");t.textContent=m;t.style.display="block";clearTimeout(tt);tt=setTimeout(()=>t.style.display="none",3500)}
+const opt=(a,v,ph)=>`<option value="">${ph}</option>`+a.map(x=>`<option${x===v?" selected":""}>${esc(x)}</option>`).join("");
+const rows=()=>(db.cfg.forms[S.form]||{rows:[]}).rows,kind=r=>r.l?"choice":r.m?"text":"info";
+
+/* ---------- Scoring: score = list value, weighted = weight x score ---------- */
+function calc(rs,ans){
+ const it=rs.map((r,i)=>{const k=kind(r),a=ans[i]||{},resp=a.r||"",com=a.c||"";
+  const sc=k=="choice"&&resp!==""?(db.cfg.lists[r.l]||{})[resp]:undefined,w=k=="choice"?+r.w||0:0;
+  return{i,k,c:r.c,d:r.d||(k=="choice"?"General":""),w,resp,com,sc,ws:sc===undefined?0:w*sc,done:k=="info"||(k=="choice"?resp!=="":com.trim()!=="")}});
+ const m={};it.forEach(x=>{if(x.k!="choice")return;const o=m[x.d]||(m[x.d]={name:x.d,n:0,a:0,w:0,ws:0,s:0});o.n++;o.w+=x.w;o.ws+=x.ws;if(x.sc!==undefined){o.a++;o.s+=x.sc}});
+ const dr=Object.values(m).map(o=>({name:o.name,n:o.n,a:o.a,w:o.w,ws:o.ws,avg:o.a?o.s/o.a:null}));
+ const W=dr.reduce((a,o)=>a+o.w,0),E=dr.reduce((a,o)=>a+o.ws,0),sc=it.filter(x=>x.sc!==undefined);
+ return{it,dr,W,E,final:W?E/W:0,avg:sc.length?sc.reduce((a,x)=>a+x.sc,0)/sc.length:null};
+}
+
+/* ---------- Audit view ---------- */
+const last=a=>{const l=db.subs.filter(s=>s.auditor==a).sort((x,y)=>y.at-x.at)[0];return l?"Last: "+fmt(l.at):"No submissions yet"};
+function auditView(){
+ const c=db.cfg;
+ if(!S.auditor)return `<h2>Who’s auditing?</h2><p class="mu">Click your name to open your form.</p><div class="tiles">${c.auditors.map(a=>`<button class="tile" data-act="pick" data-v="${esc(a)}">${esc(a)}<small>${esc(last(a))}</small></button>`).join("")}</div><p class="mu"><small>Data is saved in this browser. Use Submissions → Export to back up or share.</small></p>`;
+ return `<div class="bar"><button class="lnk" data-act="back">◀ Back to auditor list</button><b class="who">Auditor: ${esc(S.auditor)}</b>${S.edit?`<span class="chip">Editing a submission</span>`:""}</div>
+ <div class="card"><div class="g2"><label>Agent<select id="agent">${opt(c.agents,S.agent,"Select agent…")}</select></label><label>Form<select id="form">${opt(Object.keys(c.forms),S.form,"Select form…")}</select></label></div><p id="desc" class="mu"></p><div id="prog"></div></div>
+ <div id="tbl"></div><div id="sum"></div>
+ <div class="acts"><button class="pri" data-act="submit">${S.edit?"Save changes":"Submit"}</button><button data-act="clear">Clear answers</button>${S.edit?`<button data-act="cancel">Cancel edit</button>`:""}</div>`;
+}
+function drawTable(){
+ const f=db.cfg.forms[S.form];$("#desc").textContent=f?f.desc||"":"";
+ if(!f){$("#tbl").innerHTML=`<p class="mu">Select an agent and a form to begin.</p>`;$("#sum").innerHTML="";$("#prog").innerHTML="";return}
+ $("#tbl").innerHTML=`<div class="sc"><table><thead><tr><th>#<th>Component<th>Driver<th>Response<th>Comment<th>Weight<th>Score<th>Weighted<th>Status</thead><tbody>`+f.rows.map((r,i)=>{
+  const k=kind(r),a=S.ans[i]||{};
+  return `<tr class="${k=="info"?"note":""}"><td>${i+1}<td><b>${esc(r.c)}</b>${r.i?`<br><small class="mu">${esc(r.i)}</small>`:""}<td>${esc(r.d||"")}`+
+  `<td class="${k=="choice"?"in":"na"}">${k=="choice"?`<select data-i="${i}" data-f="r">${opt(Object.keys(db.cfg.lists[r.l]||{}),a.r||"","—")}</select>`:""}`+
+  `<td class="${r.m?"in":"na"}">${r.m?`<input data-i="${i}" data-f="c" value="${esc(a.c||"")}">`:""}`+
+  `<td>${k=="choice"?pct(+r.w||0):""}<td id="s${i}"><td id="w${i}"><td id="t${i}">`}).join("")+`</tbody></table></div>`;
+ recalc();
+}
+function recalc(){
+ const rs=rows();if(!rs.length)return;const r=calc(rs,S.ans);
+ r.it.forEach(x=>{const q=rs[x.i].q,set=(p,v)=>{$("#"+p+x.i).textContent=v};
+  set("s",x.sc===undefined?"":pct(x.sc));set("w",x.sc===undefined?"":pct(x.ws));
+  set("t",x.k=="info"?"ℹ Info":x.done?"✔ Done":q?"● Required":"○ Optional");
+  $("#t"+x.i).className=x.k!="info"&&x.done?"okt":x.k!="info"&&q?"badt":"";
+  const sel=document.querySelector(`select[data-i="${x.i}"]`);if(sel)sel.className=x.sc===undefined?"":x.sc>=1?"ok":x.sc<=0?"bad":"am"});
+ const req=r.it.filter(x=>x.k!="info"&&rs[x.i].q),dn=req.filter(x=>x.done).length;
+ $("#prog").innerHTML=`<span>${req.length?`${dn} of ${req.length} required rows completed${dn==req.length?" ✔ ready to submit":""}`:"No required rows"}</span><span class="big">Final score: ${pct(r.final)}</span>`;
+ $("#sum").innerHTML=`<div class="sc"><table><thead><tr><th colspan="2">Summary by driver<th>Answered<th>Weight<th>Avg score<th>Weighted</thead><tbody>${r.dr.map(o=>`<tr class="sec"><td colspan="2">${esc(o.name)}<td>${o.a} of ${o.n}<td>${pct(o.w)}<td>${o.avg===null?"–":pct(o.avg)}<td>${pct(o.ws)}`).join("")}<tr class="fin"><td colspan="2">FINAL SCORE<td>${Math.abs(r.W-1)<1e-6?"Weights total 100%":"⚠ Weights total "+pct(r.W)}<td>${pct(r.W)}<td>${r.avg===null?"–":pct(r.avg)}<td>${pct(r.E)} → ${pct(r.final)}</tbody></table></div>`;
+}
+function resetForm(){S.edit=null;S.ans={};S.agent=""}
+function submit(){
+ if(!S.agent)return toast("Select an agent first");
+ if(!S.form)return toast("Select a form first");
+ const rs=rows(),r=calc(rs,S.ans),miss=r.it.filter(x=>x.k!="info"&&rs[x.i].q&&!x.done);
+ if(miss.length)return toast("Still required: "+miss.map(x=>x.c).join("; "));
+ const old=db.subs.find(s=>s.id==S.edit),now=Date.now();
+ const rec={id:S.edit||"S"+now.toString(36),at:old?old.at:now,auditor:S.auditor,agent:S.agent,form:S.form,final:r.final,E:r.E,W:r.W,drivers:r.dr,
+  items:r.it.filter(x=>x.k!="info").map(x=>({c:x.c,d:x.d,k:x.k,resp:x.resp,com:x.com,w:x.w,sc:x.sc===undefined?null:x.sc,ws:x.ws}))};
+ if(old){rec.edited=now;db.subs[db.subs.indexOf(old)]=rec}else db.subs.push(rec);
+ save();toast((old?"Changes saved":"Submitted")+" – final score "+pct(r.final));
+ const was=!!old;resetForm();if(was)S.v="subs";render();
+}
+
+/* ---------- Submissions view (view / edit / delete) ---------- */
+const subsView=()=>`<div class="bar"><h2>Submissions</h2><input id="q" placeholder="Search agent, form, auditor…" value="${esc(S.q)}"><select id="fa">${opt(db.cfg.auditors,S.fa,"All auditors")}</select><span class="sp"></span><button data-act="csv">Export CSV</button><button data-act="jex">Export JSON</button><label class="btn" style="font-weight:400;margin:0">Import JSON<input id="imp" type="file" accept=".json" hidden></label></div><div id="sl"></div>`;
+const detail=s=>`<div class="sc"><table><thead><tr><th>Driver<th>Answered<th>Weight<th>Avg score<th>Weighted</thead><tbody>${s.drivers.map(o=>`<tr class="sec"><td>${esc(o.name)}<td>${o.a} of ${o.n}<td>${pct(o.w)}<td>${o.avg==null?"–":pct(o.avg)}<td>${pct(o.ws)}`).join("")}</tbody></table></div><div class="sc"><table><thead><tr><th>Component<th>Driver<th>Response<th>Comment<th>Weight<th>Score<th>Weighted</thead><tbody>${s.items.map(x=>`<tr><td>${esc(x.c)}<td>${esc(x.d)}<td>${esc(x.resp)}<td>${esc(x.com)}<td>${x.k=="choice"?pct(x.w):""}<td>${x.sc==null?"":pct(x.sc)}<td>${x.k=="choice"?pct(x.ws):""}`).join("")}</tbody></table></div>`;
+function subsDraw(){
+ const q=S.q.toLowerCase(),l=db.subs.filter(s=>(!S.fa||s.auditor==S.fa)&&(!q||[s.agent,s.form,s.auditor].join(" ").toLowerCase().includes(q))).sort((a,b)=>b.at-a.at);
+ $("#sl").innerHTML=l.length?`<div class="sc"><table><thead><tr><th>Date<th>Auditor<th>Agent<th>Form<th>Final<th></thead><tbody>`+l.map(s=>`<tr><td>${fmt(s.at)}${s.edited?` <small class="mu">(edited ${fmt(s.edited)})</small>`:""}<td>${esc(s.auditor)}<td>${esc(s.agent)}<td>${esc(s.form)}<td><b>${pct(s.final)}</b><td class="nw"><button data-act="view" data-v="${s.id}">${S.open==s.id?"Hide":"View"}</button> <button data-act="edit" data-v="${s.id}">Edit</button> <button data-act="del" data-v="${s.id}">Delete</button>`+(S.open==s.id?`<tr><td colspan="6">${detail(s)}`:"")).join("")+`</tbody></table></div>`:`<p class="mu">No submissions yet.</p>`;
+}
+function dl(n,t,x){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([x],{type:t}));a.download=n;a.click()}
+function csv(){
+ const q=v=>{v=String(v==null?"":v);if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replace(/"/g,'""')+'"'};
+ const h=["Submission","Submitted","Edited","Auditor","Agent","Form","Component","Driver","Response","Comment","Weight","Score","Weighted","Final"];
+ const d=db.subs.flatMap(s=>s.items.map(x=>[s.id,new Date(s.at).toISOString(),s.edited?new Date(s.edited).toISOString():"",s.auditor,s.agent,s.form,x.c,x.d,x.resp,x.com,x.k=="choice"?x.w:"",x.sc,x.k=="choice"?x.ws:"",s.final]));
+ dl("submissions.csv","text/csv",[h].concat(d).map(r=>r.map(q).join(",")).join("\n"));
+}
+
+/* ---------- Setup view ---------- */
+const setupView=()=>`<h2>Setup</h2><p class="mu">Edit auditors, agents, dropdown lists (option → score 0–1) and forms. Row fields: <b>c</b> component, <b>d</b> driver, <b>i</b> info, <b>l</b> list name, <b>w</b> weight (0–1), <b>m</b> comment box (1/0), <b>q</b> required (1/0). No list + m=1 is a free-text row; no list + m=0 is a note. Weights per form should total 1.</p><textarea id="cfg" spellcheck="false">${esc(JSON.stringify(db.cfg,null,1))}</textarea><div class="acts"><button class="pri" data-act="cfgsave">Save setup</button><button data-act="cfgreset">Reset to sample data</button></div>`;
+
+/* ---------- Actions & events ---------- */
+const act={
+ nav:v=>{S.v=v;render()},pick:v=>{S.auditor=v;render()},back:()=>{S.auditor="";render()},submit,csv,
+ clear:()=>{if(confirm("Clear all answers on this form?")){S.ans={};drawTable()}},
+ cancel:()=>{resetForm();S.v="subs";render()},
+ view:id=>{S.open=S.open==id?"":id;subsDraw()},
+ del:id=>{if(confirm("Delete this submission?")){db.subs=db.subs.filter(s=>s.id!=id);save();subsDraw()}},
+ edit:id=>{const s=db.subs.find(x=>x.id==id);if(!s)return;const f=db.cfg.forms[s.form];if(!f)return toast("That form no longer exists in Setup");
+  S.edit=id;S.auditor=s.auditor;S.agent=s.agent;S.form=s.form;S.ans={};const u=new Set();
+  f.rows.forEach((r,i)=>{const j=s.items.findIndex((x,n)=>!u.has(n)&&x.c==r.c);if(j>=0){u.add(j);S.ans[i]={r:s.items[j].resp,c:s.items[j].com}}});
+  S.v="start";render()},
+ jex:()=>dl("audit-submissions.json","application/json",JSON.stringify({subs:db.subs},null,1)),
+ cfgsave:()=>{try{const c=JSON.parse($("#cfg").value);if(!Array.isArray(c.auditors)||!Array.isArray(c.agents)||typeof c.lists!="object"||typeof c.forms!="object")throw 0;
+  Object.values(c.forms).forEach(f=>{if(!Array.isArray(f.rows))throw 0});db.cfg=c;save();toast("Setup saved")}catch(e){toast("Invalid setup JSON – not saved")}},
+ cfgreset:()=>{if(confirm("Reset setup to the sample data? Submissions are kept.")){db.cfg=JSON.parse(JSON.stringify(DEFAULT));save();render()}}
+};
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(b)act[b.dataset.act](b.dataset.v)});
+document.addEventListener("input",e=>{const t=e.target;
+ if(t.dataset.i!==undefined){(S.ans[t.dataset.i]=S.ans[t.dataset.i]||{})[t.dataset.f]=t.value;recalc()}
+ else if(t.id=="agent")S.agent=t.value;
+ else if(t.id=="form"){S.form=t.value;S.ans={};drawTable()}
+ else if(t.id=="q"){S.q=t.value;subsDraw()}else if(t.id=="fa"){S.fa=t.value;subsDraw()}
+ else if(t.id=="imp"&&t.files[0])t.files[0].text().then(x=>{try{const a=JSON.parse(x).subs;if(!Array.isArray(a))throw 0;let n=0;
+  a.forEach(s=>{const o=db.subs.find(y=>y.id==s.id);if(!o){db.subs.push(s);n++}else if((s.edited||s.at)>(o.edited||o.at)){db.subs[db.subs.indexOf(o)]=s;n++}});save();subsDraw();toast("Imported "+n+" submission(s)")}catch(e){toast("Not a valid submissions file")}});
+});
+function render(){
+ document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.v==S.v));
+ $("#app").innerHTML=S.v=="subs"?subsView():S.v=="setup"?setupView():auditView();
+ if(S.v=="subs")subsDraw();else if(S.v=="start"&&S.auditor)drawTable();
+}
+render();
+</script></body></html>
